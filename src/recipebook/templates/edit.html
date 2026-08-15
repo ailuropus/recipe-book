@@ -4,44 +4,48 @@
 {% block content %}
 <h1 class="page-head">Edit fields</h1>
 <p class="page-note">
-  Metadata and notes only. Ingredients and steps are changed by describing the
-  change in words, so that every change to the recipe body goes through a diff
-  you have reviewed.
+  The small-change path: type it yourself. For a change with knock-on effects
+  across the ingredients, a step, and the notes at once, describe it in words
+  and review the diff instead.
 </p>
+
+{% if error %}
+<p class="form-error">{{ error }}</p>
+{% endif %}
 
 <form class="form" method="post" action="/recipes/{{ recipe.id }}/edit">
 
   <label class="field">
     <span class="field__label">title</span>
-    <input class="field__input" type="text" name="title" value="{{ recipe.title }}" required>
+    <input class="field__input" type="text" name="title" value="{{ form.title }}" required>
   </label>
 
   <label class="field">
     <span class="field__label">category</span>
-    <input class="field__input" type="text" name="category" value="{{ recipe.category }}"
+    <input class="field__input" type="text" name="category" value="{{ form.category }}"
            list="categories" required>
   </label>
 
   <label class="field">
     <span class="field__label">description</span>
-    <textarea class="field__input" name="description" rows="3">{{ recipe.description }}</textarea>
+    <textarea class="field__input" name="description" rows="3">{{ form.description }}</textarea>
   </label>
 
   <label class="field">
     <span class="field__label">servings</span>
-    <input class="field__input" type="text" name="servings" value="{{ recipe.servings }}">
+    <input class="field__input" type="text" name="servings" value="{{ form.servings }}">
   </label>
 
   <div class="field-row">
     <label class="field">
       <span class="field__label">hands-on (min)</span>
       <input class="field__input num" type="number" name="hands_on_min" min="0"
-             value="{{ recipe.hands_on_min }}" required>
+             value="{{ form.hands_on_min }}" required>
     </label>
     <label class="field">
       <span class="field__label">total (min)</span>
       <input class="field__input num" type="number" name="total_min" min="0"
-             value="{{ recipe.total_min }}" required>
+             value="{{ form.total_min }}" required>
     </label>
   </div>
 
@@ -49,14 +53,14 @@
     <span class="field__label">status</span>
     <select class="field__input" name="status">
       {% for s in ["new", "tried", "solid"] %}
-      <option value="{{ s }}" {% if recipe.status == s %}selected{% endif %}>{{ s }}</option>
+      <option value="{{ s }}" {% if form.status == s %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
     </select>
   </label>
 
   <label class="check">
     <input type="checkbox" name="plan_ahead" value="true"
-           {% if recipe.plan_ahead %}checked{% endif %}>
+           {% if form.plan_ahead %}checked{% endif %}>
     <span class="check__label">plan ahead</span>
     <span class="check__hint">cannot be started and finished in one sitting</span>
   </label>
@@ -65,13 +69,34 @@
   <label class="field">
     <span class="field__label">variant note</span>
     <input class="field__input" type="text" name="variant_note"
-           value="{{ recipe.variant_note or '' }}">
+           value="{{ form.variant_note }}">
   </label>
   {% endif %}
 
   <label class="field">
+    <span class="field__label">equipment</span>
+    <span class="field__hint">one per line &mdash; <code>item | note</code></span>
+    <textarea class="field__input mono" name="equipment" rows="4"
+              spellcheck="false">{{ form.equipment }}</textarea>
+  </label>
+
+  <label class="field">
+    <span class="field__label">ingredients</span>
+    <span class="field__hint">one per line &mdash; <code>name | qty | unit | note</code></span>
+    <textarea class="field__input mono" name="ingredients" rows="8"
+              spellcheck="false">{{ form.ingredients }}</textarea>
+  </label>
+
+  <label class="field">
+    <span class="field__label">steps</span>
+    <span class="field__hint">separate each step with a line containing only <code>---</code>;
+      numbering follows the order here</span>
+    <textarea class="field__input" name="steps" rows="18">{{ form.steps }}</textarea>
+  </label>
+
+  <label class="field">
     <span class="field__label">notes</span>
-    <textarea class="field__input" name="notes_md" rows="6">{{ recipe.notes_md }}</textarea>
+    <textarea class="field__input" name="notes_md" rows="6">{{ form.notes_md }}</textarea>
   </label>
 
   <div class="actions">

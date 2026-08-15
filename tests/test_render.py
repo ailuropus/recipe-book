@@ -77,7 +77,7 @@ def test_multiline_step_keeps_the_authors_line_breaks() -> None:
     diff."""
     body = render_body(pizza())
     lines = body.splitlines()
-    start = lines.index("2. Вымешивайте тесто 10 минут. Готовое тесто перестаёт липнуть")
+    start = lines.index("2. Вымешивай тесто 10 минут. Готовое тесто перестаёт липнуть")
     assert lines[start + 1] == "   к рукам и при растягивании просвечивает, не разрываясь."
 
 

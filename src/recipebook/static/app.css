@@ -367,6 +367,37 @@ a:hover { text-decoration-thickness: 2px; }
 
 textarea.field__input { resize: vertical; line-height: 1.55; }
 
+/* Structured sections typed by hand: quantities and separators line up only in
+   a monospace face, and that alignment is how a mistyped row is spotted. */
+textarea.field__input.mono {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+
+.field__hint { color: var(--muted); font-size: 0.8125rem; }
+.field__hint code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0 0.25em;
+}
+
+/* Not the warning colour: that one means plan-ahead and nothing else. A
+   rejected form line is the signal colour, because it is about the thing you
+   are currently doing. */
+.form-error {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  background: var(--signal-bg);
+  border-left: 3px solid var(--signal);
+  padding: 0.7rem 0.9rem;
+  margin: 0 0 1.5rem;
+}
+
 .check { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
 .check__label { font-family: var(--mono); font-size: 0.8125rem; }
 .check__hint { color: var(--muted); font-size: 0.8125rem; }

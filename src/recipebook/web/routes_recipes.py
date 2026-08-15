@@ -1,14 +1,24 @@
 """Index, detail, and the plain edit form."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
+from recipebook.domain.bodytext import (
+    BodyTextError,
+    equipment_from_text,
+    equipment_to_text,
+    ingredients_from_text,
+    ingredients_to_text,
+    steps_from_text,
+    steps_to_text,
+)
+from recipebook.mapping import doc_from_recipe
 from recipebook.models import Recipe
 from recipebook.web.templating import build_templates
 
@@ -84,15 +94,37 @@ def detail(request: Request, session: SessionDep, recipe_id: uuid.UUID) -> HTMLR
     )
 
 
+def _form_from_recipe(recipe: Recipe) -> dict[str, Any]:
+    """The edit form's fields as the recipe currently stands."""
+    doc = doc_from_recipe(recipe)
+    return {
+        "title": doc.title,
+        "category": doc.category,
+        "description": doc.description,
+        "servings": doc.servings,
+        "hands_on_min": doc.hands_on_min,
+        "total_min": doc.total_min,
+        "status": doc.status,
+        "plan_ahead": doc.plan_ahead,
+        "notes_md": doc.notes_md,
+        "variant_note": recipe.variant_note or "",
+        "equipment": equipment_to_text(doc.equipment),
+        "ingredients": ingredients_to_text(doc.ingredients),
+        "steps": steps_to_text(doc.steps),
+    }
+
+
 @router.get("/recipes/{recipe_id}/edit", response_class=HTMLResponse)
 def edit_form(request: Request, session: SessionDep, recipe_id: uuid.UUID) -> HTMLResponse:
+    recipe = _get_recipe(session, recipe_id)
     return templates.TemplateResponse(
-        request, "edit.html", {"recipe": _get_recipe(session, recipe_id)}
+        request, "edit.html", {"recipe": recipe, "form": _form_from_recipe(recipe)}
     )
 
 
 @router.post("/recipes/{recipe_id}/edit")
 def edit_submit(
+    request: Request,
     session: SessionDep,
     recipe_id: uuid.UUID,
     title: Annotated[str, Form()],
@@ -107,17 +139,49 @@ def edit_submit(
     servings: Annotated[str, Form()] = "",
     notes_md: Annotated[str, Form()] = "",
     variant_note: Annotated[str, Form()] = "",
+    equipment: Annotated[str, Form()] = "",
+    ingredients: Annotated[str, Form()] = "",
+    steps: Annotated[str, Form()] = "",
     # An unchecked checkbox sends nothing at all, so the default is what
     # actually clears the flag.
     plan_ahead: Annotated[bool, Form()] = False,
-) -> RedirectResponse:
-    """The plain form covers metadata and notes only.
+) -> Response:
+    """Direct edits: everything a recipe holds, typed by hand.
 
-    Ingredients and steps are changed by describing the change in words and
-    reviewing the diff. Letting them be hand-edited here would create a second
-    write path that bypasses the gate and leaves no revision history.
+    This is the small-change path. Describing a change in words and reviewing
+    the diff is the other one, and it is what earns its keep when a change has
+    knock-on effects across the ingredients, a step, and the notes at once.
     """
     recipe = _get_recipe(session, recipe_id)
+
+    # Parsed before anything is written, so a malformed ingredient line cannot
+    # leave the recipe half-updated.
+    try:
+        parsed_equipment = equipment_from_text(equipment)
+        parsed_ingredients = ingredients_from_text(ingredients)
+        parsed_steps = steps_from_text(steps)
+    except BodyTextError as exc:
+        submitted = _form_from_recipe(recipe) | {
+            "title": title,
+            "category": category,
+            "description": description,
+            "servings": servings,
+            "hands_on_min": hands_on_min,
+            "total_min": total_min,
+            "status": status,
+            "plan_ahead": plan_ahead,
+            "notes_md": notes_md,
+            "variant_note": variant_note,
+            "equipment": equipment,
+            "ingredients": ingredients,
+            "steps": steps,
+        }
+        return templates.TemplateResponse(
+            request,
+            "edit.html",
+            {"recipe": recipe, "form": submitted, "error": str(exc)},
+            status_code=400,
+        )
 
     recipe.title = title.strip()
     recipe.category = category.strip()
@@ -128,6 +192,9 @@ def edit_submit(
     recipe.status = status
     recipe.notes_md = notes_md.strip()
     recipe.plan_ahead = plan_ahead
+    recipe.equipment = [item.model_dump(mode="json") for item in parsed_equipment]
+    recipe.ingredients = [item.model_dump(mode="json") for item in parsed_ingredients]
+    recipe.steps = [step.model_dump(mode="json") for step in parsed_steps]
     if recipe.parent_id is not None:
         recipe.variant_note = variant_note.strip() or None
 
