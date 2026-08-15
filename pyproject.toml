@@ -48,6 +48,14 @@ select = [
     "SIM",  # simplify
     "RUF",  # ruff-specific
 ]
+ignore = [
+    # Ambiguous-unicode rules. Recipe content is Russian, so Cyrillic in strings
+    # and comments is the subject matter, not a homoglyph attack. Left on, these
+    # fire on essentially every fixture and example in the project.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*" = ["E501"]

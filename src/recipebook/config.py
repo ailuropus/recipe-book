@@ -21,8 +21,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # Port 5433, not 5432: docker-compose deliberately avoids the default so it
+    # cannot collide with a Postgres already installed on the host.
     database_url: str = Field(
-        default="postgresql+psycopg://recipebook:recipebook@localhost:5432/recipebook"
+        default="postgresql+psycopg://recipebook:recipebook@localhost:5433/recipebook"
     )
 
     anthropic_api_key: str = Field(default="")

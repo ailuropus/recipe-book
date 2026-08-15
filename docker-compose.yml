@@ -14,7 +14,11 @@ services:
       POSTGRES_DB: recipebook
     ports:
       # Loopback only. Nothing about this database should be reachable off-box.
-      - "127.0.0.1:5432:5432"
+      #
+      # 5433 on the host, not 5432: this machine already runs a Postgres 14 on
+      # the default port, and stepping on it would be both rude and confusing
+      # to debug — connections silently reach the wrong server.
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

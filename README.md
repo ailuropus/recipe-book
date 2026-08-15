@@ -12,18 +12,27 @@ Requires Python 3.13 and Docker.
 
 ```sh
 cp .env.example .env          # then fill in ANTHROPIC_API_KEY from Bitwarden
-docker compose up -d db
+docker compose up -d db       # Postgres 17 on localhost:5433
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
+alembic upgrade head
 ```
+
+Postgres listens on **5433**, not 5432, so it cannot collide with a Postgres
+already installed on the host.
 
 Checks:
 
 ```sh
 ruff check . && ruff format --check .
 mypy
-pytest
+pytest                        # builds a throwaway recipebook_test database
 ```
+
+`pytest` runs the real migrations against a scratch database, so a model
+changed without a matching migration fails the suite. Schema changes always go
+through `alembic revision --autogenerate -m "..."`, reviewed by hand before
+committing.
 
 ## Reaching it from the phone
 
