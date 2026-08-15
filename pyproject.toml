@@ -85,4 +85,6 @@ disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "." so tests/ is importable as a package and fixtures can be shared between
+# modules without a conftest that re-exports everything.
+pythonpath = ["src", "."]
