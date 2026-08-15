@@ -1,0 +1,45 @@
+# Default dev flow is `docker compose up -d db` plus uvicorn on the host —
+# fast reloads, no image rebuild between edits.
+#
+# `docker compose --profile app up` runs the whole thing in containers, which
+# is what the netcup box will do. Keep both working so deployment holds no
+# surprises.
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: recipebook
+      POSTGRES_PASSWORD: recipebook
+      POSTGRES_DB: recipebook
+    ports:
+      # Loopback only. Nothing about this database should be reachable off-box.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recipebook -d recipebook"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    profiles: ["app"]
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://recipebook:recipebook@db:5432/recipebook
+      # Passed through empty if unset: `docker compose up -d db` must work
+      # with no key at all. config.require_api_key() fails loudly at the two
+      # call sites that actually need one.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HOST: 0.0.0.0
+      PORT: 8000
+    ports:
+      # Loopback only; `tailscale serve --bg 8000` publishes it to the tailnet.
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
