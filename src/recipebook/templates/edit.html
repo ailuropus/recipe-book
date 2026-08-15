@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}edit {{ recipe.title }} — recipe-book{% endblock %}
+
+{% block content %}
+<h1 class="page-head">Edit fields</h1>
+<p class="page-note">
+  Metadata and notes only. Ingredients and steps are changed by describing the
+  change in words, so that every change to the recipe body goes through a diff
+  you have reviewed.
+</p>
+
+<form class="form" method="post" action="/recipes/{{ recipe.id }}/edit">
+
+  <label class="field">
+    <span class="field__label">title</span>
+    <input class="field__input" type="text" name="title" value="{{ recipe.title }}" required>
+  </label>
+
+  <label class="field">
+    <span class="field__label">category</span>
+    <input class="field__input" type="text" name="category" value="{{ recipe.category }}"
+           list="categories" required>
+  </label>
+
+  <label class="field">
+    <span class="field__label">description</span>
+    <textarea class="field__input" name="description" rows="3">{{ recipe.description }}</textarea>
+  </label>
+
+  <label class="field">
+    <span class="field__label">servings</span>
+    <input class="field__input" type="text" name="servings" value="{{ recipe.servings }}">
+  </label>
+
+  <div class="field-row">
+    <label class="field">
+      <span class="field__label">hands-on (min)</span>
+      <input class="field__input num" type="number" name="hands_on_min" min="0"
+             value="{{ recipe.hands_on_min }}" required>
+    </label>
+    <label class="field">
+      <span class="field__label">total (min)</span>
+      <input class="field__input num" type="number" name="total_min" min="0"
+             value="{{ recipe.total_min }}" required>
+    </label>
+  </div>
+
+  <label class="field">
+    <span class="field__label">status</span>
+    <select class="field__input" name="status">
+      {% for s in ["new", "tried", "solid"] %}
+      <option value="{{ s }}" {% if recipe.status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="check">
+    <input type="checkbox" name="plan_ahead" value="true"
+           {% if recipe.plan_ahead %}checked{% endif %}>
+    <span class="check__label">plan ahead</span>
+    <span class="check__hint">cannot be started and finished in one sitting</span>
+  </label>
+
+  {% if recipe.parent_id %}
+  <label class="field">
+    <span class="field__label">variant note</span>
+    <input class="field__input" type="text" name="variant_note"
+           value="{{ recipe.variant_note or '' }}">
+  </label>
+  {% endif %}
+
+  <label class="field">
+    <span class="field__label">notes</span>
+    <textarea class="field__input" name="notes_md" rows="6">{{ recipe.notes_md }}</textarea>
+  </label>
+
+  <div class="actions">
+    <button class="btn btn--primary" type="submit">save</button>
+    <a class="btn" href="/recipes/{{ recipe.id }}">cancel</a>
+  </div>
+</form>
+{% endblock %}

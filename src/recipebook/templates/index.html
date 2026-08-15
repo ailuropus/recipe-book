@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}index — recipe-book{% endblock %}
+{% block main_class %}shell shell--wide{% endblock %}
+
+{% block content %}
+<form class="filters" method="get" action="/">
+  <input class="filters__search" type="search" name="q" value="{{ q }}"
+         placeholder="search" autocomplete="off">
+
+  <select class="filters__select" name="category">
+    <option value="">all categories</option>
+    {% for c in categories %}
+    <option value="{{ c }}" {% if c == active_category %}selected{% endif %}>{{ c }}</option>
+    {% endfor %}
+  </select>
+
+  <select class="filters__select" name="status">
+    <option value="">any status</option>
+    {% for s in ["new", "tried", "solid"] %}
+    <option value="{{ s }}" {% if s == active_status %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+
+  <button class="btn" type="submit">filter</button>
+  {% if q or active_category or active_status %}
+  <a class="filters__clear" href="/">clear</a>
+  {% endif %}
+</form>
+
+{% if recipes %}
+<table class="index">
+  <thead>
+    <tr>
+      <th class="index__flag" title="must be started well ahead"><span class="vh">plan ahead</span></th>
+      <th>title</th>
+      <th>category</th>
+      <th class="num">hands-on</th>
+      <th class="num">total</th>
+      <th>status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for recipe in recipes %}
+    <tr>
+      <td class="index__flag">
+        {% if recipe.plan_ahead %}
+        <span class="plan-ahead-bar" title="Start this well before you want to eat"></span>
+        {% endif %}
+      </td>
+      <td class="index__title">
+        <a href="/recipes/{{ recipe.id }}">{{ recipe.title }}</a>
+        {% if recipe.parent_id %}<span class="tag tag--variant">variant</span>{% endif %}
+      </td>
+      <td class="index__category">{{ recipe.category }}</td>
+      <td class="num">{{ recipe.hands_on_min | minutes }}</td>
+      <td class="num">{{ recipe.total_min | minutes }}</td>
+      <td><span class="status status--{{ recipe.status }}">{{ recipe.status }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="index__count">{{ recipes | length }} recipe{{ "" if recipes | length == 1 else "s" }}</p>
+{% else %}
+<p class="empty">Nothing matches.</p>
+{% endif %}
+{% endblock %}

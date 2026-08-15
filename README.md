@@ -16,6 +16,8 @@ docker compose up -d db       # Postgres 17 on localhost:5433
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 alembic upgrade head
+recipebook seed                # synthetic recipes, so there is something to look at
+uvicorn recipebook.web.app:app --reload
 ```
 
 Postgres listens on **5433**, not 5432, so it cannot collide with a Postgres
@@ -46,6 +48,14 @@ tailscale serve --bg 8000
 That serves `https://<machine>.<tailnet>.ts.net` with a real certificate and
 forwards to the local port. Works the same on the laptop today and on the VPS
 later. No nginx, no certbot, and port 8000 is never exposed publicly.
+
+## Two write paths, on purpose
+
+Metadata and notes are edited through a plain form. **Ingredients and steps are
+not** — those change by describing the change in words and approving a diff, so
+that every change to a recipe body leaves a revision record and passes a review
+you have actually seen. Adding a second hand-editing path for the body would
+quietly defeat that.
 
 ## Conventions
 
