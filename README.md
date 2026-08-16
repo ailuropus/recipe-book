@@ -137,6 +137,32 @@ Every call is logged to `llm_calls` with its token counts and the cost worked
 out at the time. `select sum(cost_usd) from llm_calls where recipe_id = ...`
 answers what a recipe has cost to perfect.
 
+## Export, import, backup
+
+```sh
+recipebook export -o bank.json     # or omit -o for stdout
+recipebook import bank.json        # merges by id
+recipebook backup --dir backups --keep 14
+recipebook spend                   # what the calls have cost, per recipe
+```
+
+The JSON carries recipes with their ids and their parent links, so a restore
+rebuilds the bank with its lineage intact. It deliberately does **not** carry
+revisions or the cost log — that is how a recipe got here, not the recipe, and
+leaving it out keeps a restore from resurrecting a pending review.
+
+`import` merges by id: re-running the same file is a no-op, a changed recipe is
+updated in place, and anything the file does not mention is **left alone**.
+`--mode replace` deletes those instead; merge is the default because an import
+is usually a restore, and quietly deleting recipes is the worst thing it could
+do. A file whose children are listed before their parents still loads — links
+are resolved on a second pass — and a parent that is nowhere becomes an orphan
+rather than failing the whole import.
+
+This is not a substitute for `pg_dump`, which is still the way to take
+everything. It is the copy that survives a schema change or a move to another
+machine.
+
 ## Language
 
 Recipe content is Russian; interface chrome is English. Two tests hold the line:
