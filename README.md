@@ -56,6 +56,8 @@ That serves `https://<machine>.<tailnet>.ts.net` with a real certificate and
 forwards to the local port. Works the same on the laptop today and on the VPS
 later. No nginx, no certbot, and port 8000 is never exposed publicly.
 
+Putting it on the netcup box: **[DEPLOY.md](DEPLOY.md)**.
+
 ## Two write paths
 
 Small things are typed directly into the edit form, including ingredients,

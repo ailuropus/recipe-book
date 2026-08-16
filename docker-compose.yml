@@ -41,6 +41,12 @@ services:
     ports:
       # Loopback only; `tailscale serve --bg 8000` publishes it to the tailnet.
       - "127.0.0.1:8000:8000"
+    volumes:
+      # `recipebook backup` writes here. Without this it writes into the
+      # container's own filesystem, where a rebuild silently deletes it — a
+      # backup you cannot restore from is worse than no backup, because you
+      # think you have one.
+      - ./backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
