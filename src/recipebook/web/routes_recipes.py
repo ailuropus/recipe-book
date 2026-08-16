@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from recipebook.llm.client import LlmCallFailed
 from recipebook.mapping import apply_doc, doc_from_recipe
 from recipebook.models import Recipe
 from recipebook.web.forms import FormError, RecipeForm
+from recipebook.web.responses import see_other
 from recipebook.web.templating import build_templates
 
 router = APIRouter()
@@ -174,4 +175,4 @@ def edit_submit(
         recipe.variant_note = form.variant_note.strip() or None
     record_manual_edit(session, recipe, before, doc)
 
-    return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)
+    return see_other(session, f"/recipes/{recipe.id}")

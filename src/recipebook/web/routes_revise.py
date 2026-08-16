@@ -10,7 +10,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
@@ -25,6 +25,7 @@ from recipebook.llm.client import LlmCallFailed
 from recipebook.llm.reviser import propose_revision
 from recipebook.models import Recipe, Revision
 from recipebook.schemas import RecipeDoc
+from recipebook.web.responses import see_other
 from recipebook.web.templating import build_templates
 
 router = APIRouter()
@@ -75,7 +76,7 @@ def revise_submit(
 
     # Redirect rather than render: a reload on the review page must not spend
     # money again.
-    return RedirectResponse(url=f"/revisions/{result.revision_id}", status_code=303)
+    return see_other(session, f"/revisions/{result.revision_id}")
 
 
 @router.get("/revisions/{revision_id}", response_class=HTMLResponse)
@@ -119,17 +120,17 @@ def revision_apply(
 
     if action == "discard":
         revision.status = "discarded"
-        return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)
+        return see_other(session, f"/recipes/{recipe.id}")
 
     if action == "replace":
         apply_as_replace(session, revision, recipe)
-        return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)
+        return see_other(session, f"/recipes/{recipe.id}")
 
     if action == "variant":
         variant = apply_as_variant(session, revision, recipe)
         # Land on the new variant: it is the thing that was just made, and its
         # page carries the link back to the original.
-        return RedirectResponse(url=f"/recipes/{variant.id}", status_code=303)
+        return see_other(session, f"/recipes/{variant.id}")
 
     raise HTTPException(status_code=400, detail=f"Unknown action {action!r}")
 
@@ -144,4 +145,4 @@ def revision_undo(session: SessionDep, revision_id: uuid.UUID) -> Response:
     except UndoRefused as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)
+    return see_other(session, f"/recipes/{recipe.id}")

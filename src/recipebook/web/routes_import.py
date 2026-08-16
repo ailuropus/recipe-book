@@ -9,7 +9,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
@@ -18,6 +18,7 @@ from recipebook.llm.importer import import_recipe
 from recipebook.mapping import recipe_from_doc
 from recipebook.models import LlmCall
 from recipebook.web.forms import FormError, ImportSaveForm, RecipeForm
+from recipebook.web.responses import see_other
 from recipebook.web.templating import build_templates
 
 router = APIRouter()
@@ -87,4 +88,4 @@ def import_save(
         if call is not None:
             call.recipe_id = recipe.id
 
-    return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)
+    return see_other(session, f"/recipes/{recipe.id}")
