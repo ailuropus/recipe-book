@@ -9,6 +9,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
+from recipebook.domain.history import history_for, latest_undoable, record_manual_edit
 from recipebook.mapping import apply_doc, doc_from_recipe
 from recipebook.models import Recipe
 from recipebook.web.forms import FormError, RecipeForm
@@ -82,7 +83,13 @@ def detail(request: Request, session: SessionDep, recipe_id: uuid.UUID) -> HTMLR
     return templates.TemplateResponse(
         request,
         "detail.html",
-        {"recipe": recipe, "variants": variants, "parent": parent},
+        {
+            "recipe": recipe,
+            "variants": variants,
+            "parent": parent,
+            "history": history_for(session, recipe.id),
+            "undoable": latest_undoable(session, recipe.id),
+        },
     )
 
 
@@ -120,8 +127,12 @@ def edit_submit(
             status_code=400,
         )
 
+    # Snapshot before writing, so the hand edit lands in the history with a
+    # complete before/after pair and undo treats it like any other change.
+    before = doc_from_recipe(recipe)
     apply_doc(recipe, doc)
     if recipe.parent_id is not None:
         recipe.variant_note = form.variant_note.strip() or None
+    record_manual_edit(session, recipe, before, doc)
 
     return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)

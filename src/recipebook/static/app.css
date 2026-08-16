@@ -566,3 +566,54 @@ textarea.field__input.mono {
   .diff { font-size: 0.75rem; }
   .diff__no:first-child { display: none; }
 }
+
+/* ---------------------------------------------------------------- history
+   A log, so it reads as one: monospace, dense, and quiet enough that it never
+   competes with the recipe above it. */
+
+.history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.history__item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.history__item:last-child { border-bottom: 0; }
+
+.history__when { color: var(--faint); white-space: nowrap; }
+
+.history__what {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+.history__state {
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.625rem;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.05rem 0.3rem;
+  white-space: nowrap;
+}
+
+.history__item--discarded .history__what { color: var(--faint); }
+.history__item--pending .history__state { color: var(--signal); border-color: var(--signal); }
+
+.history__link { white-space: nowrap; }
+.history__undo { margin: 0; }
+
+.btn--small { font-size: 0.6875rem; padding: 0.15rem 0.45rem; }

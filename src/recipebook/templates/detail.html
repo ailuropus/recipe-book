@@ -111,5 +111,40 @@
     <a class="btn" href="/recipes/{{ recipe.id }}/edit">edit fields</a>
   </p>
 
+  {% if history %}
+  <section class="block history">
+    <h2 class="block__head">History</h2>
+    <ol class="history__list">
+      {% for entry in history %}
+      <li class="history__item history__item--{{ entry.status }}">
+        <span class="history__when">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+        <span class="history__what">
+          {% if entry.origin == "manual" %}
+            edited by hand
+          {% elif entry.instruction %}
+            &ldquo;{{ entry.instruction }}&rdquo;
+          {% else %}
+            revision
+          {% endif %}
+        </span>
+        <span class="history__state">
+          {%- if entry.undone_at %}undone
+          {%- elif entry.status == "applied" %}{{ entry.applied_as }}
+          {%- else %}{{ entry.status }}{% endif -%}
+        </span>
+        {% if entry.origin == "llm" %}
+        <a class="history__link" href="/revisions/{{ entry.id }}">view diff</a>
+        {% endif %}
+        {% if undoable and undoable.id == entry.id %}
+        <form class="history__undo" method="post" action="/revisions/{{ entry.id }}/undo">
+          <button class="btn btn--small" type="submit">undo</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
 </article>
 {% endblock %}

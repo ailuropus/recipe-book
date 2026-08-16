@@ -120,7 +120,13 @@ class Revision(Base):
 
     status: Mapped[str] = mapped_column(String(16), default="pending")
 
+    # 'llm' for a proposal a model wrote, 'manual' for an edit typed into the
+    # form. Hand edits are recorded too, so undo covers every way a recipe can
+    # change rather than mysteriously skipping half of them.
+    origin: Mapped[str] = mapped_column(String(16), default="llm", server_default="llm")
+
     # What the cook typed, verbatim: "убавь сахар и добавь корицу".
+    # Empty for a hand edit, which describes itself through the diff.
     instruction: Mapped[str] = mapped_column(Text)
     # The LLM's plain-language account of what it changed.
     summary: Mapped[str] = mapped_column(Text, default="")
@@ -144,6 +150,7 @@ class Revision(Base):
         CheckConstraint(
             "status IN ('pending', 'applied', 'discarded')", name="ck_revisions_status"
         ),
+        CheckConstraint("origin IN ('llm', 'manual')", name="ck_revisions_origin"),
         CheckConstraint(
             "applied_as IS NULL OR applied_as IN ('replace', 'variant')",
             name="ck_revisions_applied_as",

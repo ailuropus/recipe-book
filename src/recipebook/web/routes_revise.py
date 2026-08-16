@@ -7,7 +7,6 @@ is posted.
 """
 
 import uuid
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -16,9 +15,14 @@ from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
 from recipebook.domain.diff import count_changed_lines, diff_body, diff_metadata, has_changes
+from recipebook.domain.history import (
+    UndoRefused,
+    apply_as_replace,
+    apply_as_variant,
+    undo,
+)
 from recipebook.llm.client import LlmCallFailed
 from recipebook.llm.reviser import propose_revision
-from recipebook.mapping import apply_doc
 from recipebook.models import Recipe, Revision
 from recipebook.schemas import RecipeDoc
 from recipebook.web.templating import build_templates
@@ -117,13 +121,27 @@ def revision_apply(
         revision.status = "discarded"
         return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)
 
-    if action != "replace":
-        raise HTTPException(status_code=400, detail=f"Unknown action {action!r}")
+    if action == "replace":
+        apply_as_replace(session, revision, recipe)
+        return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)
 
-    apply_doc(recipe, RecipeDoc.model_validate(revision.after_snapshot))
-    revision.status = "applied"
-    revision.applied_as = "replace"
-    revision.result_recipe_id = recipe.id
-    revision.applied_at = datetime.now(UTC)
+    if action == "variant":
+        variant = apply_as_variant(session, revision, recipe)
+        # Land on the new variant: it is the thing that was just made, and its
+        # page carries the link back to the original.
+        return RedirectResponse(url=f"/recipes/{variant.id}", status_code=303)
+
+    raise HTTPException(status_code=400, detail=f"Unknown action {action!r}")
+
+
+@router.post("/revisions/{revision_id}/undo")
+def revision_undo(session: SessionDep, revision_id: uuid.UUID) -> Response:
+    revision = _get_revision(session, revision_id)
+    recipe = _get_recipe(session, revision.recipe_id)
+
+    try:
+        undo(session, revision, recipe)
+    except UndoRefused as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)

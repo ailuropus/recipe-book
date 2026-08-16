@@ -4,6 +4,7 @@ The property that matters most: between asking for a change and choosing what
 to do with it, the recipe is untouched.
 """
 
+import re
 import uuid
 from collections.abc import Iterator
 from decimal import Decimal
@@ -315,3 +316,216 @@ def test_a_failed_call_returns_to_the_form_with_the_instruction(
     assert response.status_code == 400
     assert "ANTHROPIC_API_KEY is not set." in response.text
     assert "убавь сахар" in response.text
+
+
+# ------------------------------------------------------------ variants and undo
+
+
+def _decide(client: TestClient, location: str, action: str) -> None:
+    response = client.post(f"{location}/apply", data={"action": action}, follow_redirects=False)
+    assert response.status_code == 303
+
+
+def test_keeping_both_creates_a_linked_variant(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    parent_id = _pizza_id()
+
+    response = client.post(f"{location}/apply", data={"action": "variant"}, follow_redirects=False)
+    assert response.status_code == 303
+    variant_id = uuid.UUID(response.headers["location"].rsplit("/", 1)[1])
+    assert variant_id != parent_id
+
+    # The original is untouched.
+    parent_page = client.get(f"/recipes/{parent_id}").text
+    assert "Смешай муку, воду и 10 г сахара" not in parent_page
+
+    # The variant carries the change, and both link to each other.
+    variant_page = client.get(f"/recipes/{variant_id}").text
+    assert "Смешай муку, воду и 10 г сахара" in variant_page
+    assert f"/recipes/{parent_id}" in variant_page
+    assert f"/recipes/{variant_id}" in client.get(f"/recipes/{parent_id}").text
+
+
+def test_the_variant_note_records_what_was_asked(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    response = client.post(f"{location}/apply", data={"action": "variant"}, follow_redirects=False)
+    assert "убавь сахар до 10 г" in client.get(response.headers["location"]).text
+
+
+def test_undoing_a_replace_restores_the_recipe(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    _decide(client, location, "replace")
+    revision_id = location.rsplit("/", 1)[1]
+
+    assert "Смешай муку, воду и 10 г сахара" in client.get(f"/recipes/{_pizza_id()}").text
+
+    response = client.post(f"/revisions/{revision_id}/undo", follow_redirects=False)
+    assert response.status_code == 303
+
+    detail = client.get(f"/recipes/{_pizza_id()}").text
+    assert "Смешай муку, воду и 10 г сахара" not in detail
+    assert "- сахар — 20 г" not in detail  # rendered as a table, not markdown
+    assert "20 г" in detail
+
+    with Session(get_engine()) as check:
+        revision = check.get(Revision, uuid.UUID(revision_id))
+        assert revision is not None
+        assert revision.undone_at is not None
+
+
+def test_undoing_a_variant_removes_the_variant(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    created = client.post(f"{location}/apply", data={"action": "variant"}, follow_redirects=False)
+    variant_id = created.headers["location"].rsplit("/", 1)[1]
+
+    response = client.post(f"/revisions/{location.rsplit('/', 1)[1]}/undo", follow_redirects=False)
+    assert response.status_code == 303
+    assert client.get(f"/recipes/{variant_id}").status_code == 404
+
+
+def test_undo_refuses_to_delete_a_variant_that_has_been_worked_on(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once it has been edited it is your work, not this revision's by-product."""
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    created = client.post(f"{location}/apply", data={"action": "variant"}, follow_redirects=False)
+    variant_id = created.headers["location"].rsplit("/", 1)[1]
+
+    client.post(
+        f"/recipes/{variant_id}/edit",
+        data={
+            "title": "Пицца — вариант",
+            "category": "Основные блюда",
+            "hands_on_min": "40",
+            "total_min": "180",
+            "status": "new",
+            "ingredients": "мука | 500 | г",
+            "steps": "Замеси тесто.",
+        },
+        follow_redirects=False,
+    )
+
+    response = client.post(f"/revisions/{location.rsplit('/', 1)[1]}/undo", follow_redirects=False)
+    assert response.status_code == 409
+    assert client.get(f"/recipes/{variant_id}").status_code == 200
+
+
+def test_a_hand_edit_is_recorded_and_can_be_undone(client: TestClient) -> None:
+    """Undo that skipped half your changes would be worse than no undo."""
+    recipe_id = _pizza_id()
+    client.post(
+        f"/recipes/{recipe_id}/edit",
+        data={
+            "title": "Пицца на тонком тесте",
+            "category": "Основные блюда",
+            "description": "Хрустящая основа и тонкий слой соуса. Тесто отдыхает два часа.",
+            "servings": "2 средние пиццы",
+            "hands_on_min": "40",
+            "total_min": "180",
+            "status": "solid",
+            "equipment": "Камень для пиццы | Прогреть 40 минут\nКухонные весы",
+            "ingredients": "мука | 500 | г | Caputo 00\nвода | 325 | мл\nсоль | 10 | г",
+            "steps": "Замеси тесто и дай ему подойти.",
+            "notes_md": "В прошлый раз тесто было слишком влажным.",
+            "plan_ahead": "true",
+        },
+        follow_redirects=False,
+    )
+
+    detail = client.get(f"/recipes/{recipe_id}").text
+    assert "Замеси тесто и дай ему подойти." in detail
+    assert "edited by hand" in detail
+
+    with Session(get_engine()) as check:
+        revision = check.query(Revision).filter(Revision.origin == "manual").one()
+        assert revision.status == "applied"
+        revision_id = revision.id
+
+    client.post(f"/revisions/{revision_id}/undo", follow_redirects=False)
+
+    restored = client.get(f"/recipes/{recipe_id}").text
+    assert "Замеси тесто и дай ему подойти." not in restored
+    assert "Вымешивай тесто 10 минут" in restored
+
+
+def test_saving_the_form_unchanged_adds_no_history(client: TestClient) -> None:
+    recipe_id = _pizza_id()
+    form = client.get(f"/recipes/{recipe_id}/edit").text
+
+    import html as html_mod
+
+    def field(name: str) -> str:
+        match = re.search(rf'name="{name}"[^>]*>((?:(?!</textarea>).)*)</textarea>', form, re.S)
+        if match:
+            return html_mod.unescape(match.group(1))
+        match = re.search(rf'name="{name}"(?:(?!/?>).)*?value="([^"]*)"', form, re.S)
+        return html_mod.unescape(match.group(1)) if match else ""
+
+    client.post(
+        f"/recipes/{recipe_id}/edit",
+        data={
+            name: field(name)
+            for name in (
+                "title",
+                "category",
+                "description",
+                "servings",
+                "hands_on_min",
+                "total_min",
+                "equipment",
+                "ingredients",
+                "steps",
+                "notes_md",
+            )
+        }
+        | {"status": "tried", "plan_ahead": "true"},
+        follow_redirects=False,
+    )
+
+    with Session(get_engine()) as check:
+        assert check.query(Revision).filter(Revision.origin == "manual").count() == 0
+
+
+def test_only_the_most_recent_change_can_be_undone(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Restoring an older snapshot would silently discard everything since."""
+    first = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    _decide(client, first, "replace")
+    second = _propose(client, monkeypatch, "и ещё раз")
+    _decide(client, second, "replace")
+
+    stale = client.post(f"/revisions/{first.rsplit('/', 1)[1]}/undo", follow_redirects=False)
+    assert stale.status_code == 409
+
+    fresh = client.post(f"/revisions/{second.rsplit('/', 1)[1]}/undo", follow_redirects=False)
+    assert fresh.status_code == 303
+
+
+def test_undoing_twice_is_refused(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    _decide(client, location, "replace")
+    revision_id = location.rsplit("/", 1)[1]
+
+    assert client.post(f"/revisions/{revision_id}/undo").status_code in (200, 303)
+    assert client.post(f"/revisions/{revision_id}/undo").status_code == 409
+
+
+def test_the_history_lists_every_change(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+    _decide(client, location, "discard")
+
+    detail = client.get(f"/recipes/{_pizza_id()}").text
+    assert "History" in detail
+    assert "убавь сахар до 10 г" in detail
+    assert "discarded" in detail
