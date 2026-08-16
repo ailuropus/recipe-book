@@ -112,11 +112,18 @@ def backup_command(directory: str, *, keep: int) -> int:
 
 
 def spend_command() -> int:
-    """What the model calls have cost, in total and per recipe."""
+    """What the model calls have cost, in total and per recipe.
+
+    The per-recipe rows are reported alongside an unattributed line rather than
+    on their own. llm_calls.recipe_id is ON DELETE SET NULL, so the cost log
+    outlives the recipes it was spent on — which means a breakdown that only
+    joined to existing recipes would quietly fail to add up to the total, and
+    the reader would have no way to tell.
+    """
     with session_context() as session:
         total = session.scalar(select(func.sum(LlmCall.cost_usd))) or 0
         calls = session.scalar(select(func.count()).select_from(LlmCall)) or 0
-        print(f"{calls} calls, ${total:.4f} total")
+        print(f"{calls} call(s), ${total:.4f} total")
 
         rows = session.execute(
             select(Recipe.title, func.sum(LlmCall.cost_usd), func.count(LlmCall.id))
@@ -126,6 +133,22 @@ def spend_command() -> int:
         ).all()
         for title, cost, n in rows:
             print(f"  ${cost:.4f}  {n:>3} call(s)  {title}")
+
+        orphan_cost = (
+            session.scalar(select(func.sum(LlmCall.cost_usd)).where(LlmCall.recipe_id.is_(None)))
+            or 0
+        )
+        orphan_calls = (
+            session.scalar(
+                select(func.count()).select_from(LlmCall).where(LlmCall.recipe_id.is_(None))
+            )
+            or 0
+        )
+        if orphan_calls:
+            print(
+                f"  ${orphan_cost:.4f}  {orphan_calls:>3} call(s)  "
+                "(no recipe — imports never saved, or recipes since deleted)"
+            )
     return 0
 
 
