@@ -11,9 +11,16 @@
 :root {
   --bg:       #eef1f3;  /* cool paper */
   --surface:  #f8fafb;
+
+  /* Three steps of emphasis, all of them legible. Measured against --bg:
+     ink 15.9:1, muted 7.0:1, faint 4.8:1. The old --faint was 2.7:1, which
+     is fine on a desk and useless on a phone propped against a bowl in a
+     kitchen with the window behind you — and it carried real information:
+     status, timestamps, what a call cost. */
   --ink:      #12171c;
-  --muted:    #5b6770;
-  --faint:    #8b959c;
+  --muted:    #49525a;
+  --faint:    #646b70;
+
   --rule:     #d3dbe0;
   --rule-soft:#e3e9ec;
 
@@ -473,14 +480,51 @@ textarea.field__input.mono {
 
 .btn--primary:hover { filter: brightness(1.08); }
 
-/* ---------- small screens: the phone in the kitchen ---------- */
+/* ---------- small screens: the phone in the kitchen ----------
+   This is the case the app is actually used in: propped against a bowl,
+   read at arm's length, tapped with a floury finger. */
 
 @media (max-width: 40rem) {
   .shell { padding: 1.5rem 1rem 4rem; }
   .recipe { font-size: 1.125rem; }   /* arm's length, on a counter */
-  .index { font-size: 0.875rem; }
-  .index__category { display: none; }
   .field-row { flex-direction: column; gap: 1.1rem; }
+
+  /* The index keeps what answers "can I cook this now": the title, how long
+     it takes end to end, and whether it is proven. Hands-on and category are
+     the first things to go — they are for browsing at a desk. */
+  .index { font-size: 0.9375rem; }
+  .index__category,
+  .index__hands-on { display: none; }
+  .index tbody td { padding: 0.55rem 0.5rem; }
+
+  /* iOS zooms the whole page when a focused input is under 16px, and then
+     leaves you scrolled sideways. 16px exactly, nothing smaller. */
+  .field__input,
+  .ask__input,
+  .filters__search,
+  .filters__select {
+    font-size: 16px;
+  }
+
+  .filters__search,
+  .filters__select { flex: 1 1 100%; min-width: 0; }
+
+  /* A comfortable touch target is about 44px. The desk-sized buttons are 28. */
+  .btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.8125rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .btn--small { min-height: 36px; }
+
+  .actions,
+  .decision { flex-wrap: wrap; gap: 0.5rem; }
+
+  /* Stacked, so a decision is never a mis-tap away from its neighbour. */
+  .decision .btn { flex: 1 1 100%; justify-content: center; }
 }
 
 /* ---------------------------------------------------------------- review gate

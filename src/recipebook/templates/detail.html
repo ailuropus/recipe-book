@@ -17,9 +17,15 @@
   <p class="recipe__description">{{ recipe.description }}</p>
   {% endif %}
 
+  {# Rows only when there is something in them: an empty value next to a label
+     reads as a bug rather than as an absence. #}
   <dl class="facts">
+    {% if recipe.category %}
     <div class="facts__row"><dt>category</dt><dd>{{ recipe.category }}</dd></div>
+    {% endif %}
+    {% if recipe.servings %}
     <div class="facts__row"><dt>servings</dt><dd>{{ recipe.servings }}</dd></div>
+    {% endif %}
     <div class="facts__row"><dt>hands-on</dt><dd class="num">{{ recipe.hands_on_min | minutes }}</dd></div>
     <div class="facts__row"><dt>total</dt><dd class="num">{{ recipe.total_min | minutes }}</dd></div>
     <div class="facts__row"><dt>status</dt><dd><span class="status status--{{ recipe.status }}">{{ recipe.status }}</span></dd></div>

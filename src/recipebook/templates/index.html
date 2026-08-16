@@ -37,7 +37,7 @@
       <th class="index__flag" title="must be started well ahead"><span class="vh">plan ahead</span></th>
       <th>title</th>
       <th>category</th>
-      <th class="num">hands-on</th>
+      <th class="num index__hands-on">hands-on</th>
       <th class="num">total</th>
       <th>status</th>
     </tr>
@@ -55,7 +55,7 @@
         {% if recipe.parent_id %}<span class="tag tag--variant">variant</span>{% endif %}
       </td>
       <td class="index__category">{{ recipe.category }}</td>
-      <td class="num">{{ recipe.hands_on_min | minutes }}</td>
+      <td class="num index__hands-on">{{ recipe.hands_on_min | minutes }}</td>
       <td class="num">{{ recipe.total_min | minutes }}</td>
       <td><span class="status status--{{ recipe.status }}">{{ recipe.status }}</span></td>
     </tr>
