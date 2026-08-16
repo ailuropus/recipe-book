@@ -67,16 +67,21 @@ git clone <your remote> rakamakatui && cd rakamakatui
 cp .env.example .env
 ```
 
-Fill in `.env` from Bitwarden:
+Edit `.env`. Two lines matter:
 
 ```sh
-DATABASE_URL=postgresql+psycopg://recipebook:<a real password>@db:5432/recipebook
 ANTHROPIC_API_KEY=<from Bitwarden>
+POSTGRES_PASSWORD=<generate one, e.g. openssl rand -base64 24>
 ```
 
-Change the database password from the development default. It is only reachable
-inside the Docker network, but a password that appears in a public repository is
-not a password.
+Set `POSTGRES_PASSWORD` **before the first `up`**. Postgres only applies it when
+it initialises its data directory; changing it later does nothing until the
+volume is destroyed. And change it from the default — this repository is public,
+so a password that appears in it is not a password.
+
+Leave `DATABASE_URL` alone. That is how the *host* reaches the database. Inside
+Docker the database is `db:5432`, and `docker-compose.yml` builds that URL from
+`POSTGRES_PASSWORD` itself.
 
 Then:
 
@@ -84,6 +89,9 @@ Then:
 docker compose --profile app up -d --build
 docker compose exec app alembic upgrade head
 ```
+
+Both services are `restart: unless-stopped`, so they come back after a reboot
+without anything else to configure.
 
 ### 4. Publish it to the tailnet
 
@@ -93,6 +101,32 @@ tailscale serve status      # prints the https:// URL
 ```
 
 Open that URL on the phone. Add it to the home screen.
+
+### 5. Move your recipes across
+
+The database on the server starts empty. From the laptop:
+
+```sh
+recipebook export -o bank.json
+scp bank.json <server>:rakamakatui/
+```
+
+Then on the server:
+
+```sh
+docker compose exec -T app recipebook import /app/backups/../bank.json
+```
+
+Or more simply, put the file in `backups/` first — that directory is mounted
+into the container, so anything in it is readable from inside:
+
+```sh
+scp bank.json <server>:rakamakatui/backups/
+ssh <server> 'cd rakamakatui && docker compose exec -T app recipebook import /app/backups/bank.json'
+```
+
+`import` merges by id, so running it twice is a no-op rather than a duplicate
+bank.
 
 ## Updating
 

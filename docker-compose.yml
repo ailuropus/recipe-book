@@ -8,9 +8,15 @@
 services:
   db:
     image: postgres:17
+    # Comes back after a reboot. Without this the box restarts and the app is
+    # simply gone, with nothing to say so.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: recipebook
-      POSTGRES_PASSWORD: recipebook
+      # Set POSTGRES_PASSWORD in .env before the first `up`. Postgres only
+      # applies it when it initialises the data directory; changing it later
+      # does nothing until the volume is destroyed.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recipebook}
       POSTGRES_DB: recipebook
     ports:
       # Loopback only. Nothing about this database should be reachable off-box.
@@ -30,8 +36,13 @@ services:
   app:
     profiles: ["app"]
     build: .
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://recipebook:recipebook@db:5432/recipebook
+      # Built here rather than read from .env: inside the container the
+      # database is always db:5432, while .env holds the host's own URL
+      # (localhost:5433) for uvicorn and the CLI. Reading DATABASE_URL
+      # straight from .env would point the container at its own localhost.
+      DATABASE_URL: postgresql+psycopg://recipebook:${POSTGRES_PASSWORD:-recipebook}@db:5432/recipebook
       # Passed through empty if unset: `docker compose up -d db` must work
       # with no key at all. config.require_api_key() fails loudly at the two
       # call sites that actually need one.
