@@ -1,0 +1,55 @@
+# Default dev flow is `docker compose up -d db` plus uvicorn on the host —
+# fast reloads, no image rebuild between edits.
+#
+# `docker compose --profile app up` runs the whole thing in containers, which
+# is what the netcup box will do. Keep both working so deployment holds no
+# surprises.
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: recipebook
+      POSTGRES_PASSWORD: recipebook
+      POSTGRES_DB: recipebook
+    ports:
+      # Loopback only. Nothing about this database should be reachable off-box.
+      #
+      # 5433 on the host, not 5432: this machine already runs a Postgres 14 on
+      # the default port, and stepping on it would be both rude and confusing
+      # to debug — connections silently reach the wrong server.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recipebook -d recipebook"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    profiles: ["app"]
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://recipebook:recipebook@db:5432/recipebook
+      # Passed through empty if unset: `docker compose up -d db` must work
+      # with no key at all. config.require_api_key() fails loudly at the two
+      # call sites that actually need one.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HOST: 0.0.0.0
+      PORT: 8000
+    ports:
+      # Loopback only; `tailscale serve --bg 8000` publishes it to the tailnet.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # `recipebook backup` writes here. Without this it writes into the
+      # container's own filesystem, where a rebuild silently deletes it — a
+      # backup you cannot restore from is worse than no backup, because you
+      # think you have one.
+      - ./backups:/app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

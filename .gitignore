@@ -1,0 +1,23 @@
+# Secrets — pulled from Bitwarden into .env, never committed
+.env
+
+# Real recipe content must never be committed. Development uses tests/fixtures/.
+/backups/
+*.recipes.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# macOS
+.DS_Store

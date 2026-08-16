@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}review change — rakamakatui{% endblock %}
+
+{% block content %}
+<h1 class="page-head">Review the change</h1>
+<p class="page-note">
+  <a href="/recipes/{{ recipe.id }}">{{ recipe.title }}</a> — nothing has been
+  saved. Read what changed, then decide.
+</p>
+
+{% if revision.status != "pending" %}
+<p class="form-error">
+  This change was already {{ revision.status }}. It is shown here as a record.
+</p>
+{% endif %}
+
+<section class="review">
+  <h2 class="review__head">You asked for</h2>
+  <blockquote class="instruction">{{ revision.instruction }}</blockquote>
+</section>
+
+<section class="review">
+  <h2 class="review__head">What was changed</h2>
+  <div class="summary">{{ revision.summary | markdown }}</div>
+</section>
+
+{% if meta_changes %}
+<section class="review">
+  <h2 class="review__head">Fields</h2>
+  <table class="metadiff">
+    <thead>
+      <tr><th>field</th><th>before</th><th>after</th></tr>
+    </thead>
+    <tbody>
+      {% for change in meta_changes %}
+      <tr>
+        <th scope="row">{{ change.field }}</th>
+        <td class="metadiff__before">{{ change.before or "—" }}</td>
+        <td class="metadiff__after">{{ change.after or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="review">
+  <h2 class="review__head">
+    Recipe text
+    {% if not unchanged %}
+    <span class="tally">
+      <span class="tally__add">+{{ added }}</span>
+      <span class="tally__del">−{{ removed }}</span>
+    </span>
+    {% endif %}
+  </h2>
+
+  {% if unchanged and not meta_changes %}
+  <p class="empty">Nothing changed. The model returned the recipe as it was.</p>
+  {% else %}
+  <div class="diff">
+    {% for segment in segments %}
+      {% if segment.skipped is defined %}
+    <div class="diff__gap">{{ segment.skipped }} unchanged line{{ "" if segment.skipped == 1 else "s" }}</div>
+      {% else %}
+    <div class="diff__line diff__line--{{ segment.kind }}">
+      <span class="diff__no">{{ segment.before_no or "" }}</span>
+      <span class="diff__no">{{ segment.after_no or "" }}</span>
+      <span class="diff__mark">{% if segment.kind == "insert" %}+{% elif segment.kind == "delete" %}−{% else %} {% endif %}</span>
+      <span class="diff__text">{{ segment.text }}</span>
+    </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% if revision.status == "pending" %}
+<form class="decision" method="post" action="/revisions/{{ revision.id }}/apply">
+  <button class="btn btn--primary" type="submit" name="action" value="replace">
+    replace the recipe
+  </button>
+  <button class="btn" type="submit" name="action" value="variant">
+    keep both as a variant
+  </button>
+  <button class="btn" type="submit" name="action" value="discard">discard</button>
+</form>
+{% else %}
+<div class="actions">
+  <a class="btn" href="/recipes/{{ recipe.id }}">back to the recipe</a>
+</div>
+{% endif %}
+{% endblock %}

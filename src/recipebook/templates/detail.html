@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}{{ recipe.title }} — rakamakatui{% endblock %}
+
+{% block content %}
+<article class="recipe">
+
+  <h1 class="recipe__title">{{ recipe.title }}</h1>
+
+  {% if recipe.plan_ahead %}
+  <p class="plan-ahead-callout">
+    <span class="plan-ahead-callout__label">plan ahead</span>
+    This cannot be started and finished in one sitting.
+  </p>
+  {% endif %}
+
+  {% if recipe.description %}
+  <p class="recipe__description">{{ recipe.description }}</p>
+  {% endif %}
+
+  {# Rows only when there is something in them: an empty value next to a label
+     reads as a bug rather than as an absence. #}
+  <dl class="facts">
+    {% if recipe.category %}
+    <div class="facts__row"><dt>category</dt><dd>{{ recipe.category }}</dd></div>
+    {% endif %}
+    {% if recipe.servings %}
+    <div class="facts__row"><dt>servings</dt><dd>{{ recipe.servings }}</dd></div>
+    {% endif %}
+    <div class="facts__row"><dt>hands-on</dt><dd class="num">{{ recipe.hands_on_min | minutes }}</dd></div>
+    <div class="facts__row"><dt>total</dt><dd class="num">{{ recipe.total_min | minutes }}</dd></div>
+    <div class="facts__row"><dt>status</dt><dd><span class="status status--{{ recipe.status }}">{{ recipe.status }}</span></dd></div>
+  </dl>
+
+  {% if parent or variants %}
+  <section class="lineage">
+    {% if parent %}
+    <p class="lineage__line">
+      <span class="lineage__label">variant of</span>
+      <a href="/recipes/{{ parent.id }}">{{ parent.title }}</a>
+    </p>
+    {% if recipe.variant_note %}
+    <p class="lineage__note">{{ recipe.variant_note }}</p>
+    {% endif %}
+    {% endif %}
+    {% if variants %}
+    <p class="lineage__line"><span class="lineage__label">variants</span></p>
+    <ul class="lineage__list">
+      {% for v in variants %}
+      <li>
+        <a href="/recipes/{{ v.id }}">{{ v.title }}</a>
+        {% if v.variant_note %}<span class="lineage__note">{{ v.variant_note }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if recipe.equipment %}
+  <section class="block">
+    <h2 class="block__head">Equipment</h2>
+    <ul class="equipment">
+      {% for e in recipe.equipment %}
+      <li>
+        <span class="equipment__item">{{ e.item }}</span>
+        {% if e.note %}<span class="equipment__note">{{ e.note }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if recipe.ingredients %}
+  <section class="block">
+    <h2 class="block__head">Ingredients</h2>
+    <table class="ingredients">
+      <tbody>
+        {% for i in recipe.ingredients %}
+        <tr>
+          <td class="ingredients__qty num">
+            {% if i.qty %}{{ i.qty }}{% endif %}{% if i.unit %} {{ i.unit }}{% endif %}
+          </td>
+          <td class="ingredients__name">
+            {{ i.name }}
+            {% if i.note %}<span class="ingredients__note">{{ i.note }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if recipe.steps %}
+  <section class="block">
+    <h2 class="block__head">Steps</h2>
+    <ol class="steps">
+      {% for s in recipe.steps %}
+      <li class="step">
+        <span class="step__n num">{{ s.n }}</span>
+        <div class="step__body">{{ s.text_md | markdown }}</div>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+  {% if recipe.notes_md %}
+  <section class="block">
+    <h2 class="block__head">Notes</h2>
+    <div class="notes">{{ recipe.notes_md | markdown }}</div>
+  </section>
+  {% endif %}
+
+  <section class="block ask" id="ask">
+    <h2 class="block__head">Ask</h2>
+
+    {% if ask_error %}
+    <p class="form-error">{{ ask_error }}</p>
+    {% endif %}
+
+    {% if answer %}
+    <div class="ask__exchange">
+      <p class="ask__question">{{ question }}</p>
+      <div class="ask__answer">{{ answer | markdown }}</div>
+      {% if ask_cost %}<p class="cost">${{ ask_cost }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <form class="ask__form" method="post" action="/recipes/{{ recipe.id }}/ask#ask">
+      <input class="ask__input" type="text" name="question" required
+             placeholder="A question about this recipe"
+             value="{{ "" if answer else (question or "") }}">
+      <button class="btn" type="submit">ask</button>
+    </form>
+    <p class="ask__note">
+      Answers are not saved. Nothing here changes the recipe &mdash; use
+      <a href="/recipes/{{ recipe.id }}/revise">revise</a> for that.
+    </p>
+  </section>
+
+  <p class="actions">
+    <a class="btn btn--primary" href="/recipes/{{ recipe.id }}/revise">revise in words</a>
+    <a class="btn" href="/recipes/{{ recipe.id }}/edit">edit fields</a>
+  </p>
+
+  {% if history %}
+  <section class="block history">
+    <h2 class="block__head">History</h2>
+    <ol class="history__list">
+      {% for entry in history %}
+      <li class="history__item history__item--{{ entry.status }}">
+        <span class="history__when">{{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+        <span class="history__what">
+          {% if entry.origin == "manual" %}
+            edited by hand
+          {% elif entry.instruction %}
+            &ldquo;{{ entry.instruction }}&rdquo;
+          {% else %}
+            revision
+          {% endif %}
+        </span>
+        <span class="history__state">
+          {%- if entry.undone_at %}undone
+          {%- elif entry.status == "applied" %}{{ entry.applied_as }}
+          {%- else %}{{ entry.status }}{% endif -%}
+        </span>
+        {% if entry.origin == "llm" %}
+        <a class="history__link" href="/revisions/{{ entry.id }}">view diff</a>
+        {% endif %}
+        {% if undoable and undoable.id == entry.id %}
+        <form class="history__undo" method="post" action="/revisions/{{ entry.id }}/undo">
+          <button class="btn btn--small" type="submit">undo</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+</article>
+{% endblock %}

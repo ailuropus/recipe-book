@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}edit {{ recipe.title }} — rakamakatui{% endblock %}
+
+{% block content %}
+<h1 class="page-head">Edit fields</h1>
+<p class="page-note">
+  The small-change path: type it yourself. For a change with knock-on effects
+  across the ingredients, a step, and the notes at once, describe it in words
+  and review the diff instead.
+</p>
+
+{% if error %}
+<p class="form-error">{{ error }}</p>
+{% endif %}
+
+<form class="form" method="post" action="/recipes/{{ recipe.id }}/edit">
+  {% set show_variant_note = recipe.parent_id is not none %}
+  {% include "_recipe_fields.html" %}
+
+  <div class="actions">
+    <button class="btn btn--primary" type="submit">save</button>
+    <a class="btn" href="/recipes/{{ recipe.id }}">cancel</a>
+  </div>
+</form>
+{% endblock %}

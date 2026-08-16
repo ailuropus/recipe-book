@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}revise {{ recipe.title }} — rakamakatui{% endblock %}
+
+{% block content %}
+<h1 class="page-head">Revise</h1>
+<p class="page-note">
+  <a href="/recipes/{{ recipe.id }}">{{ recipe.title }}</a> — describe the
+  change in your own words. You will see exactly what it does before anything
+  is saved.
+</p>
+
+{% if error %}
+<p class="form-error">{{ error }}</p>
+{% endif %}
+
+<form class="form" method="post" action="/recipes/{{ recipe.id }}/revise">
+  <label class="field">
+    <span class="field__label">what to change</span>
+    <span class="field__hint">
+      Plain words, in Russian. Name a quantity, ask for more detail in a step,
+      say what went wrong last time. Changes that reach several places at once
+      are what this is for.
+    </span>
+    <textarea class="field__input" name="instruction" rows="5" required
+              autofocus>{{ instruction or "" }}</textarea>
+  </label>
+
+  <div class="actions">
+    <button class="btn btn--primary" type="submit">propose a change</button>
+    <a class="btn" href="/recipes/{{ recipe.id }}">cancel</a>
+  </div>
+</form>
+{% endblock %}

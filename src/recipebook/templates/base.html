@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef1f3">
+  <title>{% block title %}rakamakatui{% endblock %}</title>
+  <link rel="icon" href="/static/mark.png" type="image/png">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="masthead">
+    <a class="masthead__brand" href="/">
+      <img class="masthead__mouse" src="/static/mark.png" alt="" width="180" height="115">
+      <span class="masthead__name">rakamakatui</span>
+    </a>
+    <nav class="masthead__nav">
+      <a href="/">index</a>
+      <a href="/import">add</a>
+    </nav>
+  </header>
+
+  <main class="{% block main_class %}shell{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ status_code }} — rakamakatui{% endblock %}
+
+{% block content %}
+<h1 class="page-head num">{{ status_code }}</h1>
+<p class="page-note">{{ detail }}</p>
+<p class="actions"><a class="btn" href="/">back to index</a></p>
+{% endblock %}
