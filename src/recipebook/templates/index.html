@@ -3,8 +3,10 @@
 {% block main_class %}shell shell--wide{% endblock %}
 
 {% block content %}
-<img class="hero" src="/static/logo.png" alt="rakamakatui"
-     width="560" height="494">
+<div class="hero">
+  <img class="hero__mouse" src="/static/mouse.png" alt="" width="330" height="260">
+  <p class="hero__line">Let&rsquo;s cook something Maus!</p>
+</div>
 
 <form class="filters" method="get" action="/">
   <input class="filters__search" type="search" name="q" value="{{ q }}"

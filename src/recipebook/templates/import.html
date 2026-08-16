@@ -13,7 +13,8 @@
 <p class="form-error">{{ error }}</p>
 {% endif %}
 
-<form class="form" method="post" action="/import">
+<form class="form" method="post" action="/import"
+      data-busy="Reading your recipe…">
   <label class="field">
     <span class="field__label">pasted recipe</span>
     <textarea class="field__input" name="raw" rows="22" required

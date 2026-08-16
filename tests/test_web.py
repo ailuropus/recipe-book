@@ -401,3 +401,47 @@ def test_import_reports_a_missing_api_key_plainly(
     assert "ANTHROPIC_API_KEY is not set." in response.text
     # The paste comes back rather than being thrown away.
     assert "творог" in response.text
+
+
+def test_slow_forms_are_marked_for_the_waiting_room(client: TestClient) -> None:
+    """The three forms that call the model, and only those."""
+    assert 'data-busy="Reading your recipe' in client.get("/import").text
+
+    recipe_id = _first_recipe_id(client, "Луковый суп")
+    assert 'data-busy="Working out the change' in client.get(f"/recipes/{recipe_id}/revise").text
+    assert 'data-busy="Thinking' in client.get(f"/recipes/{recipe_id}").text
+
+    # The plain edit form is fast and must not put up an overlay.
+    assert "data-busy" not in client.get(f"/recipes/{recipe_id}/edit").text
+
+
+def test_the_waiting_room_is_hidden_until_javascript_shows_it(client: TestClient) -> None:
+    page = client.get("/import").text
+    assert '<div class="busy" id="busy" hidden' in page
+    assert "/static/app.js" in page
+
+
+def test_a_missing_clip_falls_back_to_the_mouse(client: TestClient) -> None:
+    """Dropping in static/processing.mp4 swaps this for the video; without the
+    file there must be no broken <video> element."""
+    from recipebook.web.templating import BUSY_CLIP
+
+    page = client.get("/import").text
+    if BUSY_CLIP.exists():
+        assert "processing.mp4" in page
+    else:
+        assert "<video" not in page
+        assert 'class="busy__clip" src="/static/mouse.png"' in page
+
+
+def test_the_brand_is_two_images_and_no_text(client: TestClient) -> None:
+    page = client.get("/").text
+    assert "/static/mouse.png" in page
+    assert "/static/wordmark.png" in page
+    assert "masthead__name" not in page
+
+
+def test_the_index_greets_you(client: TestClient) -> None:
+    page = client.get("/").text
+    assert "cook something Maus" in page
+    assert 'class="hero__mouse"' in page

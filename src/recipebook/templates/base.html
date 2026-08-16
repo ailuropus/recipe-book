@@ -5,14 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#eef1f3">
   <title>{% block title %}rakamakatui{% endblock %}</title>
-  <link rel="icon" href="/static/mark.png" type="image/png">
+  <link rel="icon" href="/static/mouse.png" type="image/png">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="masthead">
-    <a class="masthead__brand" href="/">
-      <img class="masthead__mouse" src="/static/mark.png" alt="" width="180" height="115">
-      <span class="masthead__name">rakamakatui</span>
+    <a class="masthead__brand" href="/" aria-label="rakamakatui">
+      <img class="masthead__mouse" src="/static/mouse.png" alt=""
+           width="330" height="260">
+      <img class="masthead__wordmark" src="/static/wordmark.png" alt="rakamakatui"
+           width="428" height="80">
     </a>
     <nav class="masthead__nav">
       <a href="/">index</a>
@@ -23,5 +25,22 @@
   <main class="{% block main_class %}shell{% endblock %}">
     {% block content %}{% endblock %}
   </main>
+
+  {# The waiting room. Hidden until a slow form is submitted, and inert without
+     JavaScript — the forms all still work, they just wait silently. #}
+  <div class="busy" id="busy" hidden role="status" aria-live="polite">
+    <div class="busy__panel">
+      {% if has_busy_clip %}
+      <video class="busy__clip" src="/static/processing.mp4"
+             muted loop playsinline preload="auto" aria-hidden="true"></video>
+      {% else %}
+      <img class="busy__clip" src="/static/mouse.png" alt="" width="330" height="260">
+      {% endif %}
+      <p class="busy__label">Processing&hellip;</p>
+      <p class="busy__note">This takes up to a minute and a half. Leaving the page cancels it.</p>
+    </div>
+  </div>
+
+  <script src="/static/app.js" defer></script>
 </body>
 </html>

@@ -39,6 +39,9 @@ def minutes(value: int | None) -> str:
     return f"{hours} h" if rest == 0 else f"{hours} h {rest} min"
 
 
+BUSY_CLIP = STATIC_DIR / "processing.mp4"
+
+
 def build_templates() -> Jinja2Templates:
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     filters: dict[str, Any] = {
@@ -47,6 +50,10 @@ def build_templates() -> Jinja2Templates:
         "minutes": minutes,
     }
     templates.env.filters.update(filters)
+    # Checked once at startup rather than per render. Drop an mp4 in as
+    # static/processing.mp4 and the waiting room uses it; until then it shows
+    # the mouse, so a missing file is never a broken <video> element.
+    templates.env.globals["has_busy_clip"] = BUSY_CLIP.exists()
     templates.env.trim_blocks = True
     templates.env.lstrip_blocks = True
     return templates

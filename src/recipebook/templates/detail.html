@@ -127,7 +127,8 @@
     </div>
     {% endif %}
 
-    <form class="ask__form" method="post" action="/recipes/{{ recipe.id }}/ask#ask">
+    <form class="ask__form" method="post" action="/recipes/{{ recipe.id }}/ask#ask"
+          data-busy="Thinking…">
       <input class="ask__input" type="text" name="question" required
              placeholder="A question about this recipe"
              value="{{ "" if answer else (question or "") }}">

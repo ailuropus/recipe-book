@@ -91,33 +91,46 @@ a:hover { text-decoration-thickness: 2px; }
   color: var(--ink);
 }
 
-/* The artwork is watercolour on a white ground with no alpha channel. Multiply
-   drops that ground into whatever is behind it, so the mouse sits on the page
-   rather than in a white box — and it costs nothing, unlike cutting the
-   background out by hand and losing the soft edges. */
+/* Both are trimmed to their artwork, so setting the same height actually makes
+   them the same height — padding baked into a PNG is invisible and lies.
+   The mouse is watercolour on a white ground with no alpha channel, so multiply
+   drops that ground into the page and keeps the soft edges. The wordmark has
+   real transparency and composites itself. */
 .masthead__mouse {
-  height: 30px;
+  height: 34px;
   width: auto;
   mix-blend-mode: multiply;
 }
 
-.masthead__name {
-  font-family: var(--mono);
-  font-size: 0.8125rem;
-  letter-spacing: 0.04em;
+.masthead__wordmark {
+  height: 34px;
+  width: auto;
 }
 
 .masthead__nav { font-family: var(--mono); font-size: 0.8125rem; }
 
-/* The logo gets one proper showing, on the index and nowhere else. The recipe
-   pages are for reading a recipe. */
+/* The index greeting. The recipe pages are for reading a recipe. */
 .hero {
-  display: block;
-  width: 100%;
-  max-width: 260px;
-  height: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   margin: 0 0 1.75rem;
+}
+
+.hero__mouse {
+  height: 96px;
+  width: auto;
+  flex: none;
   mix-blend-mode: multiply;
+}
+
+.hero__line {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--ink);
 }
 
 /* ---------- layout ---------- */
@@ -523,6 +536,15 @@ textarea.field__input.mono {
   .actions,
   .decision { flex-wrap: wrap; gap: 0.5rem; }
 
+  /* The masthead has to leave room for the nav on a 375px screen. */
+  .masthead { gap: 1rem; padding: 0.6rem 1rem; }
+  .masthead__mouse,
+  .masthead__wordmark { height: 26px; }
+
+  .hero { gap: 0.75rem; margin-bottom: 1.25rem; }
+  .hero__mouse { height: 68px; }
+  .hero__line { font-size: 1.125rem; }
+
   /* Stacked, so a decision is never a mis-tap away from its neighbour. */
   .decision .btn { flex: 1 1 100%; justify-content: center; }
 }
@@ -733,3 +755,88 @@ textarea.field__input.mono {
 .ask__exchange .cost::before { content: ""; }
 
 .ask__note { color: var(--faint); font-size: 0.8125rem; margin: 0.5rem 0 0; }
+
+/* ---------------------------------------------------------------- waiting room
+   A model call takes 50–90 seconds. Without this the page looks dead and the
+   natural response is to press the button again, which spends money twice. */
+
+.busy {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  /* Not fully opaque: the page underneath stays visible, so it reads as
+     "working on this" rather than "gone somewhere else". */
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.busy[hidden] { display: none; }
+
+.busy__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 26rem;
+  padding: 1.75rem 2rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  text-align: center;
+}
+
+.busy__clip {
+  height: 120px;
+  width: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+
+.busy__label {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+/* The one moving part, and it is a progress bar rather than decoration: it
+   says "still working" without pretending to know how far along it is. */
+.busy__label::after {
+  content: "";
+  display: block;
+  height: 2px;
+  margin: 0.75rem auto 0;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, var(--signal), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: busy-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes busy-sweep {
+  0%   { background-position: -60% 0; }
+  100% { background-position: 160% 0; }
+}
+
+.busy__note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* A still frame and no sweep for anyone who asked not to be moved at. */
+@media (prefers-reduced-motion: reduce) {
+  .busy__label::after { animation: none; background: var(--rule); background-size: 100% 100%; }
+  .busy__clip { display: none; }
+}
+
+@media (max-width: 40rem) {
+  .busy__panel { padding: 1.5rem 1.25rem; }
+  .busy__clip { height: 88px; }
+}
