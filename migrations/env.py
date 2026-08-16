@@ -9,7 +9,11 @@ from recipebook.models import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False, unlike the Alembic default. Migrations
+    # run in-process from the test suite and could run from the CLI, and the
+    # default silences every logger that already exists — including the app's
+    # own cost logging, which then just stops appearing with no error anywhere.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # One source of truth for the connection string: the environment, via config.py.
 # Unless a caller has already set one — the test suite points migrations at a

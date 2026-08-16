@@ -1,7 +1,7 @@
 """Index, detail, and the plain edit form."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
 from recipebook.domain.history import history_for, latest_undoable, record_manual_edit
+from recipebook.llm.asker import ask_about
+from recipebook.llm.client import LlmCallFailed
 from recipebook.mapping import apply_doc, doc_from_recipe
 from recipebook.models import Recipe
 from recipebook.web.forms import FormError, RecipeForm
@@ -74,21 +76,58 @@ def index(
 @router.get("/recipes/{recipe_id}", response_class=HTMLResponse)
 def detail(request: Request, session: SessionDep, recipe_id: uuid.UUID) -> HTMLResponse:
     recipe = _get_recipe(session, recipe_id)
+    return templates.TemplateResponse(request, "detail.html", _detail_context(session, recipe))
 
-    variants = list(
-        session.scalars(select(Recipe).where(Recipe.parent_id == recipe.id).order_by(Recipe.title))
-    )
-    parent = session.get(Recipe, recipe.parent_id) if recipe.parent_id else None
+
+def _detail_context(session: Session, recipe: Recipe) -> dict[str, Any]:
+    """Everything the detail page needs, so the ask route can re-render it."""
+    return {
+        "recipe": recipe,
+        "variants": list(
+            session.scalars(
+                select(Recipe).where(Recipe.parent_id == recipe.id).order_by(Recipe.title)
+            )
+        ),
+        "parent": session.get(Recipe, recipe.parent_id) if recipe.parent_id else None,
+        "history": history_for(session, recipe.id),
+        "undoable": latest_undoable(session, recipe.id),
+    }
+
+
+@router.post("/recipes/{recipe_id}/ask", response_class=HTMLResponse)
+def ask_submit(
+    request: Request,
+    session: SessionDep,
+    recipe_id: uuid.UUID,
+    question: Annotated[str, Form()] = "",
+) -> HTMLResponse:
+    """Answer a question about this recipe, in place.
+
+    Nothing is stored but the cost row. The answer is for the person standing
+    at the stove right now; if it turns out to be worth keeping, it belongs in
+    the recipe's notes, which is an edit.
+    """
+    recipe = _get_recipe(session, recipe_id)
+    context = _detail_context(session, recipe)
+
+    try:
+        result = ask_about(session, recipe, question)
+    except (ValueError, LlmCallFailed, RuntimeError) as exc:
+        return templates.TemplateResponse(
+            request,
+            "detail.html",
+            context | {"question": question, "ask_error": str(exc)},
+            status_code=400,
+        )
 
     return templates.TemplateResponse(
         request,
         "detail.html",
-        {
-            "recipe": recipe,
-            "variants": variants,
-            "parent": parent,
-            "history": history_for(session, recipe.id),
-            "undoable": latest_undoable(session, recipe.id),
+        context
+        | {
+            "question": result.question,
+            "answer": result.answer,
+            "ask_cost": result.cost_usd,
         },
     )
 

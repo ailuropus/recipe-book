@@ -617,3 +617,48 @@ textarea.field__input.mono {
 .history__undo { margin: 0; }
 
 .btn--small { font-size: 0.6875rem; padding: 0.15rem 0.45rem; }
+
+/* ---------------------------------------------------------------- ask
+   A question asked at the stove. Deliberately lighter than the review gate:
+   it changes nothing, so it should not look like a decision. */
+
+.ask__form { display: flex; gap: 0.5rem; align-items: stretch; }
+
+.ask__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ask__exchange {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.ask__question {
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule-soft);
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.ask__answer { font-size: 1rem; line-height: 1.6; }
+.ask__answer p { margin: 0 0 0.6rem; }
+.ask__answer p:last-child { margin-bottom: 0; }
+.ask__answer ul, .ask__answer ol { margin: 0.4rem 0; padding-left: 1.2rem; }
+
+.ask__exchange .cost { display: block; margin: 0.7rem 0 0; }
+.ask__exchange .cost::before { content: ""; }
+
+.ask__note { color: var(--faint); font-size: 0.8125rem; margin: 0.5rem 0 0; }

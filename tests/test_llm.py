@@ -4,6 +4,7 @@ Nothing here reaches the network: the client is faked, so the suite runs with
 no API key and costs nothing.
 """
 
+import logging
 from decimal import Decimal
 
 import pytest
@@ -52,13 +53,29 @@ def test_missing_cache_counts_are_treated_as_zero() -> None:
     assert cost_usd("claude-opus-5", usage) == Decimal("0.003000")
 
 
-def test_an_unpriced_model_records_zero_rather_than_a_guess(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The row keeps the model and the token counts, so it stays recomputable."""
-    usage = Usage(input_tokens=100, output_tokens=100)
-    assert cost_usd("claude-something-unreleased", usage) == Decimal("0")
-    assert "No rates on file" in caplog.text
+def test_an_unpriced_model_records_zero_rather_than_a_guess() -> None:
+    """The row keeps the model and the token counts, so it stays recomputable.
+
+    Collects on the module's own logger rather than through caplog's root
+    handler, so the assertion is about what this code emits and not about the
+    root logging configuration a previous test file happened to leave behind.
+    """
+    records: list[logging.LogRecord] = []
+
+    class Collect(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = Collect()
+    log = logging.getLogger("recipebook.llm.client")
+    log.addHandler(handler)
+    try:
+        usage = Usage(input_tokens=100, output_tokens=100)
+        assert cost_usd("claude-something-unreleased", usage) == Decimal("0")
+    finally:
+        log.removeHandler(handler)
+
+    assert any("No rates on file" in record.getMessage() for record in records)
 
 
 def test_structured_call_reports_a_missing_answer() -> None:

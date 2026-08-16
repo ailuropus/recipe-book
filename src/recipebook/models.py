@@ -195,7 +195,7 @@ class LlmCall(Base):
     called_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        CheckConstraint("kind IN ('import', 'revise')", name="ck_llm_calls_kind"),
+        CheckConstraint("kind IN ('import', 'revise', 'ask')", name="ck_llm_calls_kind"),
         Index("ix_llm_calls_recipe_id", "recipe_id"),
         Index("ix_llm_calls_called_at", "called_at"),
     )

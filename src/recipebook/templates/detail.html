@@ -106,6 +106,33 @@
   </section>
   {% endif %}
 
+  <section class="block ask" id="ask">
+    <h2 class="block__head">Ask</h2>
+
+    {% if ask_error %}
+    <p class="form-error">{{ ask_error }}</p>
+    {% endif %}
+
+    {% if answer %}
+    <div class="ask__exchange">
+      <p class="ask__question">{{ question }}</p>
+      <div class="ask__answer">{{ answer | markdown }}</div>
+      {% if ask_cost %}<p class="cost">${{ ask_cost }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <form class="ask__form" method="post" action="/recipes/{{ recipe.id }}/ask#ask">
+      <input class="ask__input" type="text" name="question" required
+             placeholder="A question about this recipe"
+             value="{{ "" if answer else (question or "") }}">
+      <button class="btn" type="submit">ask</button>
+    </form>
+    <p class="ask__note">
+      Answers are not saved. Nothing here changes the recipe &mdash; use
+      <a href="/recipes/{{ recipe.id }}/revise">revise</a> for that.
+    </p>
+  </section>
+
   <p class="actions">
     <a class="btn btn--primary" href="/recipes/{{ recipe.id }}/revise">revise in words</a>
     <a class="btn" href="/recipes/{{ recipe.id }}/edit">edit fields</a>

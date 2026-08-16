@@ -155,6 +155,44 @@ was ambiguous and you had to choose, say which way you went.
 """
 
 
+ASK_TASK = """\
+Here is a recipe in the house format, and a question about it from the cook \
+standing in their kitchen.
+
+Answer the question. Nothing else — this does not change the recipe, and you \
+are not being asked to rewrite it.
+
+How to answer:
+
+- In Russian, на ты, the same as the recipe.
+- Short. Two or three sentences is usually right. A question about \
+substitutions or timing may need a little more; a yes-or-no question needs a \
+yes or a no first, then the reason.
+- Concrete. Give the number, the temperature, the time, the sign to look for. \
+"Пока не загустеет" is the kind of answer this app exists to avoid.
+- Grounded in this recipe. If the answer is already in a step, say which step \
+and repeat the relevant part rather than sending them hunting.
+- Honest about the edge of the recipe. If the question goes past what the \
+recipe says — a substitution it does not cover, a piece of equipment it does \
+not use — answer from general cooking knowledge and say plainly that this part \
+is not from the recipe.
+- If the answer would mean changing the recipe, say what you would change in \
+one sentence and mention that the revise screen is where a change gets made. \
+Do not produce a revised recipe here.
+
+Assume a beginner: they can follow instructions exactly but cannot yet tell by \
+instinct, so say how to know rather than only what to do.
+
+<recipe>
+{recipe}
+</recipe>
+
+<question>
+{question}
+</question>\
+"""
+
+
 def system_blocks() -> list[TextBlockParam]:
     """The house format as a cached system block.
 
@@ -173,6 +211,10 @@ def system_blocks() -> list[TextBlockParam]:
 
 def import_message(raw: str) -> str:
     return IMPORT_TASK.format(raw=raw.strip())
+
+
+def ask_message(recipe: RecipeDoc, question: str) -> str:
+    return ASK_TASK.format(recipe=render_full(recipe), question=question.strip())
 
 
 def revise_message(recipe: RecipeDoc, instruction: str) -> str:

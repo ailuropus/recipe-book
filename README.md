@@ -101,8 +101,41 @@ The proposal is stored as a pending row and the browser is redirected to it, so
 reloading the review page rereads a row rather than paying for the same call
 twice. Nothing reaches the recipe until you post a decision.
 
-Measured cost on a real recipe: roughly **$0.07 for an import** and **$0.15 for
-a revision**, at 50–75 seconds each.
+Applying a change offers three outcomes: replace the recipe, keep both (the
+revised version becomes a linked child, with the instruction as its variant
+note), or discard.
+
+## Undo
+
+Every change is recorded, including edits typed into the form, and the most
+recent one can be undone from the recipe's history. A replace is restored from
+its before-snapshot. A variant is reversed by deleting the recipe it created —
+but only while that recipe is still untouched; once it has been edited or given
+variants of its own, undo refuses rather than deleting your work.
+
+Only the most recent change is undoable. Restoring an older snapshot would
+silently discard everything done since, which is not what anyone means by undo.
+
+## Ask
+
+The recipe page has a question box. It sends that recipe plus your question and
+answers in Russian, на ты, citing the step a fact came from and saying plainly
+when an answer is *not* from the recipe. It changes nothing and saves nothing —
+if an answer is worth keeping, it belongs in the notes, which is an edit.
+
+## What the calls cost
+
+Measured on a real recipe:
+
+| call     | cost   | time |
+|----------|--------|------|
+| import   | $0.073 | 48 s |
+| revision | $0.147 | 74 s |
+| ask      | $0.028 | 10 s |
+
+Every call is logged to `llm_calls` with its token counts and the cost worked
+out at the time. `select sum(cost_usd) from llm_calls where recipe_id = ...`
+answers what a recipe has cost to perfect.
 
 ## Language
 
