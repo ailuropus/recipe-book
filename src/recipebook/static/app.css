@@ -24,6 +24,13 @@
   --warn:     #c2185b;
   --warn-bg:  #fce7f0;
 
+  /* Diff only. Additions get the one extra hue in the palette; removals get
+     grey rather than red, so nothing on a review screen can be mistaken for
+     the plan-ahead warning. */
+  --add:      #0a6b3d;
+  --add-bg:   #e7f3ec;
+  --del-bg:   #e7ebee;
+
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 
@@ -447,4 +454,115 @@ textarea.field__input.mono {
   .index { font-size: 0.875rem; }
   .index__category { display: none; }
   .field-row { flex-direction: column; gap: 1.1rem; }
+}
+
+/* ---------------------------------------------------------------- review gate
+   The one screen the whole app exists for. Read at arm's length, so the diff
+   is monospace and generously leaded rather than packed like the index. */
+
+.review { margin: 0 0 2.25rem; }
+
+.review__head {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.instruction {
+  margin: 0;
+  padding: 0.6rem 0 0.6rem 0.9rem;
+  border-left: 3px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.summary { font-size: 1.0625rem; line-height: 1.6; max-width: var(--measure); }
+.summary p { margin: 0 0 0.6rem; }
+
+.tally { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0; }
+.tally__add { color: var(--add); }
+.tally__del { color: var(--muted); margin-left: 0.4rem; }
+
+.metadiff { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+.metadiff th, .metadiff td {
+  text-align: left;
+  padding: 0.4rem 0.7rem 0.4rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+.metadiff thead th {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  font-weight: 500;
+}
+.metadiff tbody th {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+  width: 12ch;
+}
+.metadiff__before { color: var(--muted); background: var(--del-bg); }
+.metadiff__after { color: var(--add); background: var(--add-bg); }
+
+.diff {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+.diff__line { display: flex; align-items: baseline; white-space: pre-wrap; }
+.diff__line--insert { background: var(--add-bg); color: var(--add); }
+.diff__line--delete { background: var(--del-bg); color: var(--muted); }
+
+.diff__no {
+  flex: 0 0 3.5ch;
+  text-align: right;
+  padding-right: 0.5ch;
+  color: var(--faint);
+  font-size: 0.75rem;
+  user-select: none;
+}
+.diff__mark { flex: 0 0 2ch; text-align: center; user-select: none; }
+.diff__text { flex: 1 1 auto; padding-right: 0.9rem; min-width: 0; }
+
+.diff__gap {
+  padding: 0.25rem 0 0.25rem 9ch;
+  color: var(--faint);
+  font-size: 0.75rem;
+  background: var(--bg);
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.decision {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+}
+.decision__note { color: var(--faint); font-size: 0.8125rem; }
+
+@media (max-width: 40rem) {
+  .diff { font-size: 0.75rem; }
+  .diff__no:first-child { display: none; }
 }

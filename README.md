@@ -89,6 +89,21 @@ Every call records its token counts and a cost worked out at the time it was
 made, in `llm_calls`. Rates are a snapshot, so an old row still means what it
 meant when written. There are no quotas — the point is to see the spend.
 
+## Revising in words
+
+`/recipes/<id>/revise` takes a plain-language instruction and returns a whole
+revised recipe — whole, not a patch, because a change usually reaches several
+places at once and they have to land together. The review screen shows what you
+asked, what the model says it did, a field-by-field metadata table, and a
+line diff of the recipe text with long unchanged runs collapsed.
+
+The proposal is stored as a pending row and the browser is redirected to it, so
+reloading the review page rereads a row rather than paying for the same call
+twice. Nothing reaches the recipe until you post a decision.
+
+Measured cost on a real recipe: roughly **$0.07 for an import** and **$0.15 for
+a revision**, at 50–75 seconds each.
+
 ## Language
 
 Recipe content is Russian; interface chrome is English. Two tests hold the line:

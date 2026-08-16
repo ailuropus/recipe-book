@@ -5,12 +5,18 @@ a *good* one contains. Both are needed: a structurally valid recipe that says
 "обжарь лук до готовности" is useless to someone who has never seen a properly
 caramelised onion.
 
-The system prompt is a cache breakpoint. It is identical on every import and
-every revision, so after the first call of a session it is billed at a tenth of
-the input rate.
+The system prompt is a cache breakpoint. Measured against the live API: it is
+written to the cache on first use and read back on the next call of the *same
+kind*. Imports and revisions never share an entry, because the output schema
+travels in the request ahead of the cached prefix and the two schemas differ.
+So the saving is real for a run of imports, or a run of revisions on the same
+recipe, and nil when alternating between them.
 """
 
 from anthropic.types import TextBlockParam
+
+from recipebook.domain.render import render_full
+from recipebook.schemas import RecipeDoc
 
 HOUSE_FORMAT = """\
 You restructure recipes into one house format for a personal recipe bank.
@@ -114,11 +120,47 @@ Set `status` to "new".
 """
 
 
+REVISE_TASK = """\
+Here is a recipe in the house format, and a change the cook wants.
+
+Apply the change and return the whole recipe, revised. Returning the full \
+recipe rather than a patch is deliberate: a change usually has knock-on \
+effects, and they must all land together.
+
+Follow the change through everywhere it reaches. If a quantity changes, the \
+ingredient row changes, every step that uses that quantity changes, and any \
+note that refers to it changes. A recipe where the ingredient list and the \
+steps disagree is worse than one that was never revised.
+
+Change nothing the instruction does not reach. Untouched steps come back \
+word for word — not reworded, not tidied, not improved. The cook reviews this \
+as a line-by-line diff, and gratuitous rewording buries the real change in \
+noise.
+
+Reconsider `plan_ahead`, `hands_on_min`, and `total_min` only if the change \
+actually affects them.
+
+In `summary`, say what you changed in one or two plain sentences, in Russian, \
+as you would to the person who asked. Name the knock-on effects: "убавил \
+сахар до 20 г — поправил в составе, в шаге 2 и в заметке". If the instruction \
+was ambiguous and you had to choose, say which way you went.
+
+<recipe>
+{recipe}
+</recipe>
+
+<change>
+{instruction}
+</change>\
+"""
+
+
 def system_blocks() -> list[TextBlockParam]:
     """The house format as a cached system block.
 
-    Marked as a cache breakpoint because it is identical across every call the
-    app makes, and it is the largest fixed part of each request.
+    Identical across every call the app makes, and the largest fixed part of
+    each request — so it is worth a breakpoint even though the cache only pays
+    off within a run of calls that share an output schema.
     """
     return [
         TextBlockParam(
@@ -131,3 +173,15 @@ def system_blocks() -> list[TextBlockParam]:
 
 def import_message(raw: str) -> str:
     return IMPORT_TASK.format(raw=raw.strip())
+
+
+def revise_message(recipe: RecipeDoc, instruction: str) -> str:
+    """The recipe goes in as the same markdown the cook reads on the page.
+
+    Not JSON: the diff the cook reviews is computed over this rendering, so the
+    model is looking at the same text whose lines it is about to move.
+    """
+    return REVISE_TASK.format(
+        recipe=render_full(recipe),
+        instruction=instruction.strip(),
+    )

@@ -11,11 +11,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from recipebook.web.routes_import import router as import_router
 from recipebook.web.routes_recipes import router as recipes_router
+from recipebook.web.routes_revise import router as revise_router
 from recipebook.web.templating import STATIC_DIR, build_templates
 
 app = FastAPI(title="recipe-book", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(import_router)
+app.include_router(revise_router)
 app.include_router(recipes_router)
 
 templates = build_templates()
