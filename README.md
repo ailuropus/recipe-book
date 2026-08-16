@@ -75,6 +75,20 @@ steps         separated by a line containing only ---
 Step numbering follows the order in the textarea, so deleting one renumbers the
 rest.
 
+## Adding a recipe
+
+Paste anything into `/import` — prose, a list, a transcript. One LLM call
+restructures it into the house format, and the result lands on a review screen
+where every field is editable. **Nothing is written until you press save.**
+
+What a good recipe contains lives in `llm/prompts.py`, not in the schema: the
+schema can only say a step exists, not that it tells a beginner how to know the
+onions are actually caramelised.
+
+Every call records its token counts and a cost worked out at the time it was
+made, in `llm_calls`. Rates are a snapshot, so an old row still means what it
+meant when written. There are no quotas — the point is to see the spend.
+
 ## Language
 
 Recipe content is Russian; interface chrome is English. Two tests hold the line:

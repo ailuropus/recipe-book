@@ -4,7 +4,9 @@ These exercise the routes through a real database so the search query, the
 form round-trip, and the variant links are covered end to end.
 """
 
+import uuid
 from collections.abc import Iterator
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,8 +16,10 @@ from sqlalchemy.orm import Session
 from recipebook.db import get_engine, get_session_factory
 from recipebook.demo import demo_recipes, demo_variant_of_pizza
 from recipebook.mapping import recipe_from_doc
-from recipebook.models import Recipe
+from recipebook.models import LlmCall, Recipe
+from recipebook.schemas import Ingredient, Step
 from recipebook.web.app import app
+from tests.conftest import use_test_database
 
 
 @pytest.fixture
@@ -25,10 +29,10 @@ def client(engine: Engine) -> Iterator[TestClient]:
     The application's cached engine and session factory are rebuilt against the
     test database, then torn down, so this cannot leak into a later test.
     """
-    get_engine.cache_clear()
-    get_session_factory.cache_clear()
+    use_test_database()
 
     with Session(engine) as setup:
+        setup.query(LlmCall).delete()
         setup.query(Recipe).delete()
         docs = demo_recipes()
         parent = recipe_from_doc(docs[0])
@@ -46,6 +50,7 @@ def client(engine: Engine) -> Iterator[TestClient]:
         yield test_client
 
     with Session(engine) as teardown:
+        teardown.query(LlmCall).delete()
         teardown.query(Recipe).delete()
         teardown.commit()
 
@@ -262,3 +267,137 @@ def test_unchecked_plan_ahead_clears_the_flag(client: TestClient) -> None:
     client.post(f"/recipes/{recipe_id}/edit", data=form, follow_redirects=False)
 
     assert "plan-ahead-callout" not in client.get(f"/recipes/{recipe_id}").text
+
+
+def test_import_form_renders(client: TestClient) -> None:
+    response = client.get("/import")
+    assert response.status_code == 200
+    assert 'name="raw"' in response.text
+
+
+def test_import_shows_a_review_and_saves_nothing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate: the model has answered, and still nothing is in the database."""
+    from recipebook.llm.importer import ImportResult
+    from recipebook.schemas import RecipeDoc
+
+    doc = RecipeDoc(
+        title="Сырники",
+        category="Завтраки",
+        description="Творожные оладьи на завтрак.",
+        hands_on_min=20,
+        total_min=25,
+        servings="2 порции",
+        plan_ahead=False,
+        ingredients=[Ingredient(name="творог", qty="400", unit="г", note="жирность 9%")],
+        steps=[Step(n=1, text_md="Разотри творог вилкой до однородности.")],
+    )
+    monkeypatch.setattr(
+        "recipebook.web.routes_import.import_recipe",
+        lambda session, raw: ImportResult(doc=doc, llm_call_id=uuid.uuid4(), cost_usd="0.0312"),
+    )
+
+    response = client.post("/import", data={"raw": "творог, яйцо, мука"})
+
+    assert response.status_code == 200
+    assert "Сырники" in response.text
+    assert "творог | 400 | г | жирность 9%" in response.text
+    assert "0.0312" in response.text
+
+    with Session(get_engine()) as session:
+        assert session.query(Recipe).filter(Recipe.title == "Сырники").count() == 0
+
+
+def test_saving_a_reviewed_import_creates_the_recipe(client: TestClient) -> None:
+    response = client.post(
+        "/import/save",
+        data={
+            "title": "Сырники",
+            "category": "Завтраки",
+            "description": "Творожные оладьи на завтрак.",
+            "servings": "2 порции",
+            "hands_on_min": "20",
+            "total_min": "25",
+            "status": "new",
+            "equipment": "",
+            "ingredients": "творог | 400 | г | жирность 9%",
+            "steps": "Разотри творог вилкой до однородности.",
+            "notes_md": "",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    detail = client.get(response.headers["location"]).text
+    assert "Сырники" in detail
+    assert "жирность 9%" in detail
+
+
+def test_saving_attaches_the_import_cost_to_the_new_recipe(client: TestClient) -> None:
+    """An import call is made before the recipe exists; the save links them up."""
+    with Session(get_engine()) as setup:
+        call = LlmCall(kind="import", model="claude-opus-5", cost_usd=Decimal("0.0312"))
+        setup.add(call)
+        setup.commit()
+        call_id = call.id
+
+    response = client.post(
+        "/import/save",
+        data={
+            "title": "Сырники",
+            "category": "Завтраки",
+            "hands_on_min": "20",
+            "total_min": "25",
+            "status": "new",
+            "ingredients": "творог | 400 | г",
+            "steps": "Разотри творог вилкой.",
+            "llm_call_id": str(call_id),
+        },
+        follow_redirects=False,
+    )
+    recipe_id = uuid.UUID(response.headers["location"].rsplit("/", 1)[1])
+
+    with Session(get_engine()) as check:
+        saved = check.get(LlmCall, call_id)
+        assert saved is not None
+        assert saved.recipe_id == recipe_id
+
+
+def test_a_bad_line_in_the_review_saves_nothing(client: TestClient) -> None:
+    response = client.post(
+        "/import/save",
+        data={
+            "title": "Сырники",
+            "category": "Завтраки",
+            "hands_on_min": "20",
+            "total_min": "25",
+            "status": "new",
+            "ingredients": "творог | 400 | г | 9% | лишнее",
+            "steps": "Разотри творог вилкой.",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "Line 1" in response.text
+
+    with Session(get_engine()) as check:
+        assert check.query(Recipe).filter(Recipe.title == "Сырники").count() == 0
+
+
+def test_import_reports_a_missing_api_key_plainly(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a key this is the first thing that happens, so it must not 500."""
+
+    def blow_up(session: object, raw: str) -> None:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set.")
+
+    monkeypatch.setattr("recipebook.web.routes_import.import_recipe", blow_up)
+
+    response = client.post("/import", data={"raw": "творог"})
+    assert response.status_code == 400
+    assert "ANTHROPIC_API_KEY is not set." in response.text
+    # The paste comes back rather than being thrown away.
+    assert "творог" in response.text

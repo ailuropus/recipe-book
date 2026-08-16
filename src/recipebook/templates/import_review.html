@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}review import — recipe-book{% endblock %}
+
+{% block content %}
+<h1 class="page-head">Review before saving</h1>
+<p class="page-note">
+  Nothing has been written yet. Correct anything that is wrong, then save.
+  {% if cost_usd %}<span class="cost">this import cost ${{ cost_usd }}</span>{% endif %}
+</p>
+
+{% if error %}
+<p class="form-error">{{ error }}</p>
+{% endif %}
+
+<form class="form" method="post" action="/import/save">
+  <input type="hidden" name="llm_call_id" value="{{ llm_call_id }}">
+  {% set show_variant_note = false %}
+  {% include "_recipe_fields.html" %}
+
+  <div class="actions">
+    <button class="btn btn--primary" type="submit">save recipe</button>
+    <a class="btn" href="/import">discard</a>
+  </div>
+</form>
+{% endblock %}

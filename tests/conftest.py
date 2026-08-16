@@ -18,7 +18,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from recipebook.config import Settings
+from recipebook.config import Settings, get_settings
+from recipebook.db import get_engine, get_session_factory
 
 TEST_DB_NAME = "recipebook_test"
 
@@ -55,9 +56,35 @@ def engine(test_database_url: str) -> Iterator[Engine]:
     # under test that reaches for get_engine() lands in the right place.
     os.environ["DATABASE_URL"] = test_database_url
 
+    # get_settings() is cached. Any test that touched it before this fixture
+    # ran — an LLM call reads it for the model name — cached the *development*
+    # URL, and every later get_engine() would then quietly open the real
+    # database. Clearing here is what keeps the suite off it.
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
+
     eng = create_engine(test_database_url, future=True)
     yield eng
     eng.dispose()
+
+
+def use_test_database() -> None:
+    """Rebuild the application's cached engine against the test database.
+
+    The assertion is the point. Pointing the app at the wrong database is
+    silent — the tests pass, and the damage shows up in real data — so this
+    fails loudly instead.
+    """
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
+
+    actual = get_engine().url.database
+    assert actual == TEST_DB_NAME, (
+        f"The application is pointed at database {actual!r}, not {TEST_DB_NAME!r}. "
+        "Refusing to run tests against it."
+    )
 
 
 @pytest.fixture

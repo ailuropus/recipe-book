@@ -1,7 +1,7 @@
 """Index, detail, and the plain edit form."""
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -9,17 +9,9 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
-from recipebook.domain.bodytext import (
-    BodyTextError,
-    equipment_from_text,
-    equipment_to_text,
-    ingredients_from_text,
-    ingredients_to_text,
-    steps_from_text,
-    steps_to_text,
-)
-from recipebook.mapping import doc_from_recipe
+from recipebook.mapping import apply_doc, doc_from_recipe
 from recipebook.models import Recipe
+from recipebook.web.forms import FormError, RecipeForm
 from recipebook.web.templating import build_templates
 
 router = APIRouter()
@@ -94,32 +86,11 @@ def detail(request: Request, session: SessionDep, recipe_id: uuid.UUID) -> HTMLR
     )
 
 
-def _form_from_recipe(recipe: Recipe) -> dict[str, Any]:
-    """The edit form's fields as the recipe currently stands."""
-    doc = doc_from_recipe(recipe)
-    return {
-        "title": doc.title,
-        "category": doc.category,
-        "description": doc.description,
-        "servings": doc.servings,
-        "hands_on_min": doc.hands_on_min,
-        "total_min": doc.total_min,
-        "status": doc.status,
-        "plan_ahead": doc.plan_ahead,
-        "notes_md": doc.notes_md,
-        "variant_note": recipe.variant_note or "",
-        "equipment": equipment_to_text(doc.equipment),
-        "ingredients": ingredients_to_text(doc.ingredients),
-        "steps": steps_to_text(doc.steps),
-    }
-
-
 @router.get("/recipes/{recipe_id}/edit", response_class=HTMLResponse)
 def edit_form(request: Request, session: SessionDep, recipe_id: uuid.UUID) -> HTMLResponse:
     recipe = _get_recipe(session, recipe_id)
-    return templates.TemplateResponse(
-        request, "edit.html", {"recipe": recipe, "form": _form_from_recipe(recipe)}
-    )
+    form = RecipeForm.from_doc(doc_from_recipe(recipe), variant_note=recipe.variant_note or "")
+    return templates.TemplateResponse(request, "edit.html", {"recipe": recipe, "form": form})
 
 
 @router.post("/recipes/{recipe_id}/edit")
@@ -127,24 +98,7 @@ def edit_submit(
     request: Request,
     session: SessionDep,
     recipe_id: uuid.UUID,
-    title: Annotated[str, Form()],
-    category: Annotated[str, Form()],
-    hands_on_min: Annotated[int, Form()],
-    total_min: Annotated[int, Form()],
-    status: Annotated[str, Form()],
-    # Every optional text field defaults to empty. Clearing a description or a
-    # note is a legal edit, and an empty form value arrives as "" rather than
-    # as a present-but-blank required field.
-    description: Annotated[str, Form()] = "",
-    servings: Annotated[str, Form()] = "",
-    notes_md: Annotated[str, Form()] = "",
-    variant_note: Annotated[str, Form()] = "",
-    equipment: Annotated[str, Form()] = "",
-    ingredients: Annotated[str, Form()] = "",
-    steps: Annotated[str, Form()] = "",
-    # An unchecked checkbox sends nothing at all, so the default is what
-    # actually clears the flag.
-    plan_ahead: Annotated[bool, Form()] = False,
+    form: Annotated[RecipeForm, Form()],
 ) -> Response:
     """Direct edits: everything a recipe holds, typed by hand.
 
@@ -154,48 +108,20 @@ def edit_submit(
     """
     recipe = _get_recipe(session, recipe_id)
 
-    # Parsed before anything is written, so a malformed ingredient line cannot
-    # leave the recipe half-updated.
+    # Parsed in full before anything is assigned, so a malformed ingredient
+    # line cannot leave the recipe half-updated.
     try:
-        parsed_equipment = equipment_from_text(equipment)
-        parsed_ingredients = ingredients_from_text(ingredients)
-        parsed_steps = steps_from_text(steps)
-    except BodyTextError as exc:
-        submitted = _form_from_recipe(recipe) | {
-            "title": title,
-            "category": category,
-            "description": description,
-            "servings": servings,
-            "hands_on_min": hands_on_min,
-            "total_min": total_min,
-            "status": status,
-            "plan_ahead": plan_ahead,
-            "notes_md": notes_md,
-            "variant_note": variant_note,
-            "equipment": equipment,
-            "ingredients": ingredients,
-            "steps": steps,
-        }
+        doc = form.to_doc()
+    except FormError as exc:
         return templates.TemplateResponse(
             request,
             "edit.html",
-            {"recipe": recipe, "form": submitted, "error": str(exc)},
+            {"recipe": recipe, "form": form, "error": str(exc)},
             status_code=400,
         )
 
-    recipe.title = title.strip()
-    recipe.category = category.strip()
-    recipe.description = description.strip()
-    recipe.servings = servings.strip()
-    recipe.hands_on_min = hands_on_min
-    recipe.total_min = total_min
-    recipe.status = status
-    recipe.notes_md = notes_md.strip()
-    recipe.plan_ahead = plan_ahead
-    recipe.equipment = [item.model_dump(mode="json") for item in parsed_equipment]
-    recipe.ingredients = [item.model_dump(mode="json") for item in parsed_ingredients]
-    recipe.steps = [step.model_dump(mode="json") for step in parsed_steps]
+    apply_doc(recipe, doc)
     if recipe.parent_id is not None:
-        recipe.variant_note = variant_note.strip() or None
+        recipe.variant_note = form.variant_note.strip() or None
 
     return RedirectResponse(url=f"/recipes/{recipe.id}", status_code=303)

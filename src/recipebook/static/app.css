@@ -376,6 +376,17 @@ textarea.field__input.mono {
 }
 
 .field__hint { color: var(--muted); font-size: 0.8125rem; }
+
+/* What a call cost, stated plainly. There are no quotas — the point is to be
+   able to see the spend, not to be stopped by it. */
+.cost {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.cost::before { content: "· "; }
+
 .field__hint code {
   font-family: var(--mono);
   font-size: 0.9em;

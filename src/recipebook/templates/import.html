@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}add a recipe — recipe-book{% endblock %}
+
+{% block content %}
+<h1 class="page-head">Add a recipe</h1>
+<p class="page-note">
+  Paste a recipe in any shape — prose, a list, a transcript, notes to yourself.
+  It gets restructured into the house format, and you review the result before
+  anything is saved.
+</p>
+
+{% if error %}
+<p class="form-error">{{ error }}</p>
+{% endif %}
+
+<form class="form" method="post" action="/import">
+  <label class="field">
+    <span class="field__label">pasted recipe</span>
+    <textarea class="field__input" name="raw" rows="22" required
+              autofocus>{{ raw or "" }}</textarea>
+  </label>
+
+  <div class="actions">
+    <button class="btn btn--primary" type="submit">restructure</button>
+    <a class="btn" href="/">cancel</a>
+  </div>
+</form>
+{% endblock %}
