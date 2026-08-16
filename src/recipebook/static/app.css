@@ -76,15 +76,42 @@ a:hover { text-decoration-thickness: 2px; }
   background: var(--surface);
 }
 
-.masthead__mark {
+.masthead__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+/* The artwork is watercolour on a white ground with no alpha channel. Multiply
+   drops that ground into whatever is behind it, so the mouse sits on the page
+   rather than in a white box — and it costs nothing, unlike cutting the
+   background out by hand and losing the soft edges. */
+.masthead__mouse {
+  height: 30px;
+  width: auto;
+  mix-blend-mode: multiply;
+}
+
+.masthead__name {
   font-family: var(--mono);
   font-size: 0.8125rem;
   letter-spacing: 0.04em;
-  color: var(--ink);
-  text-decoration: none;
 }
 
 .masthead__nav { font-family: var(--mono); font-size: 0.8125rem; }
+
+/* The logo gets one proper showing, on the index and nowhere else. The recipe
+   pages are for reading a recipe. */
+.hero {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin: 0 0 1.75rem;
+  mix-blend-mode: multiply;
+}
 
 /* ---------- layout ---------- */
 

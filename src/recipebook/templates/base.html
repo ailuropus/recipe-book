@@ -3,12 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}recipe-book{% endblock %}</title>
+  <title>{% block title %}rakamakatui{% endblock %}</title>
+  <link rel="icon" href="/static/mark.png" type="image/png">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="masthead">
-    <a class="masthead__mark" href="/">recipe-book</a>
+    <a class="masthead__brand" href="/">
+      <img class="masthead__mouse" src="/static/mark.png" alt="" width="180" height="115">
+      <span class="masthead__name">rakamakatui</span>
+    </a>
     <nav class="masthead__nav">
       <a href="/">index</a>
       <a href="/import">add</a>
