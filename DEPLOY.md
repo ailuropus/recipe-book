@@ -1,7 +1,7 @@
 # Deploying rakamakatui
 
-A netcup VPS running Ubuntu, reachable only over Tailscale. No public port, no
-reverse proxy, no certificate to renew, no CI.
+A netcup VPS running Debian 13 (trixie), reachable only over Tailscale. No
+public port, no reverse proxy, no certificate to renew, no CI.
 
 Everything here is done by hand on purpose. This is one app for one person, and
 a deploy is three commands you can read.
@@ -35,18 +35,49 @@ version would.
 
 ### 1. The machine
 
-On a fresh Ubuntu box, as a user with sudo:
+Debian 13, as a user with sudo.
+
+Docker comes from Docker's own repository, not Debian's. Debian ships
+`docker.io`, but its companion `docker-compose` is the retired Python v1, and
+this project needs Compose v2 for `profiles:`. Installing `docker.io` now also
+makes a later move to `docker-ce` a conflict to untangle. `docker-compose-v2`
+is an Ubuntu package name and does not exist here.
 
 ```sh
-sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+sudo apt update
+sudo apt install -y git ca-certificates curl
+
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+
+sudo apt install -y docker-ce docker-ce-cli containerd.io \
+                    docker-buildx-plugin docker-compose-plugin
 sudo usermod -aG docker "$USER"
-# log out and back in for the group to take effect
+```
+
+Log out and back in for the group to take effect, then check:
+
+```sh
+docker --version
+docker compose version     # a subcommand, not the docker-compose binary
+docker run --rm hello-world
 ```
 
 ### 2. Tailscale
 
+Some netcup images already have the Tailscale apt repository configured — if
+`apt update` mentions `pkgs.tailscale.com`, it is there and `apt install` is
+enough. Otherwise the install script adds it.
+
 ```sh
-curl -fsSL https://tailscale.com/install.sh | sh
+tailscale version || sudo apt install -y tailscale \
+  || curl -fsSL https://tailscale.com/install.sh | sh
+sudo systemctl enable --now tailscaled
 sudo tailscale up
 ```
 
