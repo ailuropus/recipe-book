@@ -176,44 +176,68 @@ between a bad migration and retyping your recipes.
 
 ## Backups
 
-Two kinds, and you want both.
+Two kinds, because they fail differently. The JSON export carries recipes only
+but survives a schema change or a move to another machine. The `pg_dump`
+restores everything exactly — revisions, the cost log — but is tied to this
+schema.
 
-`pg_dump` takes everything — recipes, revision history, the cost log — and
-restores exactly. It is tied to this schema:
-
-```sh
-docker compose exec db pg_dump -U recipebook recipebook | gzip > dump-$(date +%F).sql.gz
-```
-
-The JSON export takes recipes only, and survives a schema change or a move to a
-different machine:
-
-```sh
-docker compose exec app recipebook backup --dir /app/backups --keep 30
-```
-
-A nightly cron for the second one:
+`scripts/backup.sh` does both. Install it as a nightly cron job:
 
 ```sh
 crontab -e
 ```
 
 ```
-0 3 * * * cd /home/YOU/rakamakatui && docker compose exec -T app recipebook backup --dir /app/backups --keep 30
+0 3 * * * /home/YOU/rakamakatui/scripts/backup.sh >> /home/YOU/backup.log 2>&1
 ```
 
-Copy them off the box periodically. A backup that only exists on the machine
-that dies is not a backup:
+Run it once by hand first, to see it work:
 
 ```sh
-# from the laptop
-rsync -av vps:rakamakatui/backups/ ~/rakamakatui-backups/
+~/rakamakatui/scripts/backup.sh
 ```
 
-Restoring recipes into an empty database:
+Keep counts are `KEEP_JSON` (30) and `KEEP_DUMPS` (14), overridable per run:
+`KEEP_DUMPS=2 scripts/backup.sh`.
+
+### Everything is written from inside a container, on purpose
+
+Docker creates `./backups` owned by **root**, so anything the host user tries
+to write or delete there is permission denied. The script therefore does the
+export, the dump, and the pruning inside the containers, where the process is
+root and none of that applies. No sudo anywhere.
+
+The consequence to know about: you cannot `rm` an old backup from the shell
+either. Go through a container:
 
 ```sh
-docker compose exec app recipebook import /app/backups/rakamakatui-<stamp>.json
+docker compose exec -T app sh -c 'rm /app/backups/rakamakatui-<stamp>.json'
+```
+
+### Copy them off the box
+
+A backup that only exists on the machine that dies is not a backup. From the
+laptop, whenever you think of it:
+
+```sh
+rsync -av netcup:rakamakatui/backups/ ~/rakamakatui-backups/
+```
+
+The files are world-readable, so this needs no privileges.
+
+### Restoring
+
+Recipes, into any database, any version of the app:
+
+```sh
+recipebook export | ssh <server> 'cd rakamakatui && docker compose exec -T app recipebook import -'
+```
+
+Everything, exactly, into the same schema:
+
+```sh
+gunzip -c backups/rakamakatui-<stamp>.sql.gz \
+  | docker compose exec -T db psql -U recipebook -d recipebook
 ```
 
 ## Secrets

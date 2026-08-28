@@ -27,6 +27,10 @@ services:
       - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # So pg_dump can write its own output. The alternative is redirecting on
+      # the host, which fails: Docker creates ./backups owned by root, and the
+      # dump would need a sudo chown to land.
+      - ./backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U recipebook -d recipebook"]
       interval: 5s
