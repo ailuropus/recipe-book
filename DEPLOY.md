@@ -135,29 +135,31 @@ Open that URL on the phone. Add it to the home screen.
 
 ### 5. Move your recipes across
 
-The database on the server starts empty. From the laptop:
+The database on the server starts empty. Pipe an export straight into the
+container from the laptop:
 
 ```sh
-recipebook export -o bank.json
-scp bank.json <server>:rakamakatui/
+recipebook export | ssh <server> 'cd rakamakatui && docker compose exec -T app recipebook import -'
 ```
 
-Then on the server:
-
-```sh
-docker compose exec -T app recipebook import /app/backups/../bank.json
-```
-
-Or more simply, put the file in `backups/` first — that directory is mounted
-into the container, so anything in it is readable from inside:
-
-```sh
-scp bank.json <server>:rakamakatui/backups/
-ssh <server> 'cd rakamakatui && docker compose exec -T app recipebook import /app/backups/bank.json'
-```
+No file is written on the server, which avoids the trap: `docker compose up`
+creates the `backups/` bind mount as **root**, so scp'ing into it as your own
+user fails with permission denied until you `sudo chown` it. Reading from stdin
+sidesteps that entirely.
 
 `import` merges by id, so running it twice is a no-op rather than a duplicate
-bank.
+bank. Check the result with:
+
+```sh
+ssh <server> 'cd rakamakatui && docker compose exec -T app recipebook export' | head -3
+```
+
+If you do want files on the server — for the nightly backup cron below — take
+ownership of the directory once:
+
+```sh
+sudo chown "$USER:$USER" ~/rakamakatui/backups
+```
 
 ## Updating
 
