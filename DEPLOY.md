@@ -165,7 +165,7 @@ sudo chown "$USER:$USER" ~/rakamakatui/backups
 
 ```sh
 cd rakamakatui
-recipebook backup --dir backups     # before anything else
+scripts/backup.sh
 git pull
 docker compose --profile app up -d --build
 docker compose exec app alembic upgrade head
@@ -173,6 +173,39 @@ docker compose exec app alembic upgrade head
 
 Back up first, every time. It takes a second and it is the only thing standing
 between a bad migration and retyping your recipes.
+
+`scripts/backup.sh`, not `recipebook backup`: there is no `recipebook` on this
+host. The CLI is installed inside the image, and nothing in the setup above
+puts it on the VPS's PATH — so the bare command fails with "command not found"
+at exactly the moment a backup matters most. The script takes the JSON export
+*and* a `pg_dump`, both from inside the containers, which is also what keeps it
+clear of the root-owned `backups/` directory.
+
+The last two lines belong together. A rebuilt container starts serving the
+moment it is up, and a release that adds a column answers every request with a
+500 until the migration lands — the new code is querying columns that are not
+there yet. It clears as soon as `alembic upgrade head` finishes. Run them back
+to back, and do not go hunting for the fault in between.
+
+### Backing a release out
+
+The same shape, aimed at the commit you were on before:
+
+```sh
+git checkout <previous sha>
+docker compose --profile app up -d --build
+docker compose exec app alembic downgrade -1
+```
+
+`downgrade -1` only if the release you are undoing added a migration, and only
+one step per migration it added. When in doubt:
+
+```sh
+git log --oneline <previous sha>..HEAD -- migrations/versions/
+```
+
+Nothing listed means the schema did not move and the first two lines are the
+whole rollback.
 
 ## Backups
 
