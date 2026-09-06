@@ -37,12 +37,21 @@ async def no_stale_pages(request: Request, call_next: Callable[..., Any]) -> Res
     redirect straight after a write is exactly when they serve the old copy —
     the page looks unchanged until you refresh.
 
-    Static assets are excluded: those are content that only changes when the
-    file does, and they are the one thing worth caching.
+    Static assets are the exception, and templates ask for them through
+    `static_url`, which puts a hash of the file's contents in the query string.
+    That is what makes caching them safe: the URL changes when the bytes do, so
+    a fingerprinted response can be kept for a year and a deploy still reaches
+    the browser immediately.
+
+    A /static/ request with no fingerprint gets no header at all, which leaves
+    the browser's own heuristics in charge — right for a URL typed by hand or
+    held in an old page, and never wrong for long.
     """
     response: Response = await call_next(request)
     if not request.url.path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-store, must-revalidate"
+    elif request.query_params.get("v"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 

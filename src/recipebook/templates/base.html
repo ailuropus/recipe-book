@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#eef1f3">
   <title>{% block title %}rakamakatui{% endblock %}</title>
-  <link rel="icon" href="/static/mouse.png" type="image/png">
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="{{ static_url('mouse.png') }}" type="image/png">
+  <link rel="stylesheet" href="{{ static_url('app.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="masthead">
     <a class="masthead__brand" href="/" aria-label="rakamakatui">
-      <img class="masthead__mouse" src="/static/mouse.png" alt=""
+      <img class="masthead__mouse" src="{{ static_url('mouse.png') }}" alt=""
            width="330" height="260">
-      <img class="masthead__wordmark" src="/static/wordmark.png" alt="rakamakatui"
+      <img class="masthead__wordmark" src="{{ static_url('wordmark.png') }}" alt="rakamakatui"
            width="428" height="80">
     </a>
     <nav class="masthead__nav">
@@ -31,7 +31,8 @@
      JavaScript — the forms all still work, they just wait silently. #}
   <div class="busy" id="busy" hidden role="status" aria-live="polite">
     <div class="busy__panel">
-      {% if busy_clip_sources %}
+      {% set clips = busy_clip_sources() %}
+      {% if clips %}
       {# No autoplay: the overlay is hidden until a slow form is submitted, and
          the script starts the clip then. preload="auto" is what makes it ready
          to run the instant it is needed. #}
@@ -40,18 +41,18 @@
          shift between the reserved space and the running clip. #}
       <video class="busy__clip" muted loop playsinline
              preload="auto" aria-hidden="true" width="120" height="120">
-        {% for source in busy_clip_sources %}
+        {% for source in clips %}
         <source src="{{ source.src }}" type="{{ source.type }}">
         {% endfor %}
       </video>
       {% else %}
-      <img class="busy__clip" src="/static/mouse.png" alt="" width="330" height="260">
+      <img class="busy__clip" src="{{ static_url('mouse.png') }}" alt="" width="330" height="260">
       {% endif %}
       <p class="busy__label">Processing&hellip;</p>
       <p class="busy__note">This takes up to a minute and a half. Leaving the page cancels it.</p>
     </div>
   </div>
 
-  <script src="/static/app.js" defer></script>
+  <script src="{{ static_url('app.js') }}" defer></script>
 </body>
 </html>

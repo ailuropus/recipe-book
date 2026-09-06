@@ -1,5 +1,7 @@
-"""Jinja environment and the filters templates rely on."""
+"""Jinja environment, the filters templates rely on, and asset URLs."""
 
+import hashlib
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,38 @@ def minutes(value: int | None) -> str:
 # it is roughly half the size of the mp4, and a browser that cannot play it
 # falls straight through to the next <source> without fetching anything. mp4
 # second, which is what Safari and iOS take.
+@lru_cache(maxsize=64)
+def _fingerprint(name: str, mtime_ns: int, size: int) -> str:
+    """A short hash of the file's contents.
+
+    Keyed on mtime and size as well as the name so the hash is computed once
+    and then recomputed the moment the file is touched — which is what makes
+    this work under `uvicorn --reload`, where a stylesheet edit restarts
+    nothing.
+    """
+    return hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:10]
+
+
+def static_url(name: str) -> str:
+    """The URL for a static file, carrying a hash of what is in it.
+
+    Without this, a stylesheet is `/static/app.css` before a deploy and
+    `/static/app.css` after it. Browsers cache static assets heuristically, so
+    the old copy keeps being used against the new HTML — the markup for a new
+    feature arrives and none of its rules do, which looks like a broken deploy
+    and is a cached file. Changing the URL when the bytes change is what tells
+    the browser to go and get it.
+    """
+    path = STATIC_DIR / name
+    try:
+        stat = path.stat()
+    except OSError:
+        # A missing file is the caller's problem, not this function's; hand
+        # back the plain URL and let it 404 visibly.
+        return f"/static/{name}"
+    return f"/static/{name}?v={_fingerprint(name, stat.st_mtime_ns, stat.st_size)}"
+
+
 BUSY_CLIP_FORMATS = (
     ("running_mausi.webm", "video/webm"),
     ("running_mausi.mp4", "video/mp4"),
@@ -57,7 +91,7 @@ def busy_clip_sources() -> list[dict[str, str]]:
     broken <video> element.
     """
     return [
-        {"src": f"/static/{name}", "type": mime}
+        {"src": static_url(name), "type": mime}
         for name, mime in BUSY_CLIP_FORMATS
         if (STATIC_DIR / name).exists()
     ]
@@ -71,7 +105,10 @@ def build_templates() -> Jinja2Templates:
         "minutes": minutes,
     }
     templates.env.filters.update(filters)
-    templates.env.globals["busy_clip_sources"] = busy_clip_sources()
+    templates.env.globals["static_url"] = static_url
+    # Resolved per render rather than pinned at startup, so the clip's own URL
+    # picks up a replaced file the same way every other asset does.
+    templates.env.globals["busy_clip_sources"] = busy_clip_sources
     templates.env.trim_blocks = True
     templates.env.lstrip_blocks = True
     return templates

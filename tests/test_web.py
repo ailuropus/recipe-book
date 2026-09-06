@@ -19,6 +19,7 @@ from recipebook.mapping import recipe_from_doc
 from recipebook.models import LlmCall, Recipe
 from recipebook.schemas import Ingredient, Step
 from recipebook.web.app import app
+from recipebook.web.templating import STATIC_DIR
 from tests.conftest import use_test_database
 
 
@@ -454,3 +455,46 @@ def test_the_index_greets_you(client: TestClient) -> None:
     page = client.get("/").text
     assert "cook something Maus" in page
     assert 'class="hero__mouse"' in page
+
+
+def test_static_urls_carry_a_fingerprint(client: TestClient) -> None:
+    """A stylesheet whose URL never changes is a stylesheet a browser keeps.
+
+    This is what stopped a deploy reaching the phone: new markup arrived with
+    the previous release's CSS still cached against it.
+    """
+    import re
+
+    page = client.get("/").text
+    match = re.search(r'href="(/static/app\.css\?v=[0-9a-f]+)"', page)
+    assert match, "the stylesheet is linked without a fingerprint"
+
+    response = client.get(match.group(1))
+    assert response.status_code == 200
+    assert "immutable" in response.headers["cache-control"]
+
+
+def test_the_fingerprint_follows_the_file(client: TestClient) -> None:
+    from recipebook.web.templating import static_url
+
+    before = static_url("app.css")
+    path = STATIC_DIR / "app.css"
+    original = path.read_bytes()
+    try:
+        path.write_bytes(original + b"\n/* touched */\n")
+        assert static_url("app.css") != before
+    finally:
+        path.write_bytes(original)
+
+
+def test_an_unfingerprinted_static_request_is_left_to_the_browser(
+    client: TestClient,
+) -> None:
+    """No header rather than a wrong one: this is a hand-typed or stale URL."""
+    response = client.get("/static/app.css")
+    assert response.status_code == 200
+    assert "immutable" not in response.headers.get("cache-control", "")
+
+
+def test_pages_are_never_cached(client: TestClient) -> None:
+    assert "no-store" in client.get("/").headers["cache-control"]
