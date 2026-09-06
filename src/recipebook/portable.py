@@ -25,7 +25,12 @@ from recipebook.schemas import RecipeDoc
 
 # Bumped only when the file layout changes in a way an older reader would get
 # wrong. The recipe body is validated by RecipeDoc, which has its own rules.
-FORMAT_VERSION = 1
+#
+# 2 added deleted_at and purged_at. An older reader would load a version 2 file
+# and put every deleted recipe back in the index, silently undoing deletions
+# the file records — which is exactly what the version gate is for. A version 1
+# file still loads here: no timestamps means nothing was deleted, which is true.
+FORMAT_VERSION = 2
 
 
 class PortableRecipe(RecipeDoc):
@@ -34,6 +39,10 @@ class PortableRecipe(RecipeDoc):
     id: uuid.UUID
     parent_id: uuid.UUID | None = None
     variant_note: str | None = None
+    # The trash travels with the bank. A restore that quietly resurrected
+    # everything you had deleted would be as wrong as one that dropped it.
+    deleted_at: datetime | None = None
+    purged_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -62,7 +71,11 @@ MergeMode = Literal["merge", "replace"]
 
 
 def export_all(session: Session) -> Export:
-    """Every recipe, parents before children.
+    """Every recipe, deleted ones included, parents before children.
+
+    Purged rows are exported too. They carry no recipe anyone will read again,
+    but they are what a variant's parent link points at, and a file that
+    dropped them would restore that variant as an orphan.
 
     The order is not required by the importer — it resolves forward references
     on a second pass — but it makes the file readable and makes a hand-edited
@@ -106,6 +119,8 @@ def _to_portable(recipe: Recipe) -> PortableRecipe:
         id=recipe.id,
         parent_id=recipe.parent_id,
         variant_note=recipe.variant_note,
+        deleted_at=recipe.deleted_at,
+        purged_at=recipe.purged_at,
         created_at=recipe.created_at,
         updated_at=recipe.updated_at,
     )
@@ -152,7 +167,11 @@ def import_export(session: Session, export: Export, *, mode: MergeMode = "merge"
             session.add(recipe)
             existing[portable.id] = recipe
             added += 1
-        elif _content_of(recipe) == _document_of(portable) and _lineage_matches(recipe, portable):
+        elif (
+            _content_of(recipe) == _document_of(portable)
+            and _lineage_matches(recipe, portable)
+            and (recipe.deleted_at, recipe.purged_at) == _deletion_of(portable)
+        ):
             skipped += 1
             continue
         else:
@@ -160,6 +179,7 @@ def import_export(session: Session, export: Export, *, mode: MergeMode = "merge"
 
         apply_doc(recipe, _document_of(portable))
         recipe.variant_note = portable.variant_note
+        recipe.deleted_at, recipe.purged_at = _deletion_of(portable)
         if portable.created_at is not None:
             recipe.created_at = portable.created_at
 
@@ -194,8 +214,31 @@ def import_export(session: Session, export: Export, *, mode: MergeMode = "merge"
 
 def _document_of(portable: PortableRecipe) -> RecipeDoc:
     return RecipeDoc.model_validate(
-        portable.model_dump(exclude={"id", "parent_id", "variant_note", "created_at", "updated_at"})
+        portable.model_dump(
+            exclude={
+                "id",
+                "parent_id",
+                "variant_note",
+                "deleted_at",
+                "purged_at",
+                "created_at",
+                "updated_at",
+            }
+        )
     )
+
+
+def _deletion_of(portable: PortableRecipe) -> tuple[datetime | None, datetime | None]:
+    """The deletion state to write, normalised.
+
+    A purge is only ever reached through the trash, and the database has a
+    CHECK constraint saying so. A hand-edited file that sets purged_at alone
+    would fail the whole import over a detail nobody meant — so fill the
+    missing half in rather than refuse the restore.
+    """
+    if portable.purged_at is not None and portable.deleted_at is None:
+        return portable.purged_at, portable.purged_at
+    return portable.deleted_at, portable.purged_at
 
 
 def _content_of(recipe: Recipe) -> RecipeDoc:
