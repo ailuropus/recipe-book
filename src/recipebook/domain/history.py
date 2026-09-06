@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from recipebook.domain.trash import move_to_trash, purge
 from recipebook.mapping import apply_doc, doc_to_dict
 from recipebook.models import Recipe, Revision
 from recipebook.schemas import RecipeDoc
@@ -99,6 +100,9 @@ def undo(session: Session, revision: Revision, recipe: Recipe) -> None:
     still exactly as this revision made it. Once it has been edited or given
     variants of its own it is somebody's work, not this revision's by-product,
     and undo refuses rather than deleting it.
+
+    "Removing" is the soft deletion the rest of the app uses. The row survives,
+    so nothing that pointed at it is left pointing at nothing.
     """
     if revision.status != "applied" or revision.undone_at is not None:
         raise UndoRefused("That change has already been undone.")
@@ -123,7 +127,14 @@ def _undo_variant(session: Session, revision: Revision) -> None:
         return
 
     variant = session.get(Recipe, revision.result_recipe_id)
-    if variant is None:
+    if variant is None or variant.is_purged:
+        return
+
+    # Already in the trash: you have said you do not want it, so undo finishes
+    # the job without arguing about whether it was edited first.
+    if variant.in_trash:
+        purge(session, variant)
+        revision.result_recipe_id = None
         return
 
     if session.scalar(select(Recipe.id).where(Recipe.parent_id == variant.id)) is not None:
@@ -137,7 +148,12 @@ def _undo_variant(session: Session, revision: Revision) -> None:
             "so undo will not delete it. Delete it yourself if that is what you want."
         )
 
-    session.delete(variant)
+    # Soft, like every other deletion here, and straight past the trash: this
+    # recipe is a by-product the cook never asked for, so offering to restore
+    # it would be offering back the thing they just took away. The row stays so
+    # the revision that made it still points at something real.
+    move_to_trash(session, variant)
+    purge(session, variant)
     revision.result_recipe_id = None
 
 
