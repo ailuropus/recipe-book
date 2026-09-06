@@ -118,6 +118,43 @@ variants of its own, undo refuses rather than deleting your work.
 Only the most recent change is undoable. Restoring an older snapshot would
 silently discard everything done since, which is not what anyone means by undo.
 
+## Deleting
+
+Delete is one press on the recipe page and asks nothing, because it is not
+final. The recipe moves to the trash, the index that follows carries a shield
+naming it with a restore button and a bar draining through the ten seconds it
+stays, and after that it is still in **/trash** until you say otherwise.
+
+Deleted recipes are out of the index, out of search, and out of the category
+list. They are not out of the database. There are two steps and neither one
+removes the row:
+
+| state         | `deleted_at` | `purged_at` | where it appears |
+|---------------|--------------|-------------|------------------|
+| in the bank   | —            | —           | index, search, lineage |
+| in the trash  | set          | —           | /trash, and its own page |
+| deleted forever | set        | set         | nowhere |
+
+**Delete forever keeps the row too.** `recipes.parent_id` points at it, and
+`ON DELETE SET NULL` means a real `DELETE` would take the parent link off every
+variant of that recipe — a variant that can no longer say where it came from
+has lost something the trash was never asked to take. So the row survives as an
+anchor: the link stays in the database and the interface stops drawing it.
+
+A recipe in the trash still reads in full, because deciding whether to restore
+it means looking at it. What it does not have is any way to change it: revise,
+edit, and ask are gone from the page and refused by the routes with a 409 that
+says to restore it first. Spending a model call on a recipe that is not in the
+bank is never what anyone meant.
+
+Deleting moves one recipe and never a family. Its variants stay in the index
+and say **variant of &lt;name&gt; (deleted)** — the lineage is a fact about the
+variant, not about what is currently on screen. Restoring the parent puts the
+line back to normal; deleting it forever takes the line away entirely.
+
+Nothing in the trash expires on a timer. A recipe leaves that list because you
+restored it or because you said forever, never because a fortnight passed.
+
 ## Ask
 
 The recipe page has a question box. It sends that recipe plus your question and
@@ -148,8 +185,11 @@ recipebook backup --dir backups --keep 14
 recipebook spend                   # what the calls have cost, per recipe
 ```
 
-The JSON carries recipes with their ids and their parent links, so a restore
-rebuilds the bank with its lineage intact. It deliberately does **not** carry
+The JSON carries recipes with their ids, their parent links, and their deletion
+state, so a restore rebuilds the bank with its lineage and its trash intact —
+a backup that quietly resurrected everything you had deleted would be a bad
+backup. That is what took the file to format version 2; a version 1 file still
+loads, and reads as a bank with nothing deleted. It deliberately does **not** carry
 revisions or the cost log — that is how a recipe got here, not the recipe, and
 leaving it out keeps a restore from resurrecting a pending review.
 
