@@ -422,16 +422,25 @@ def test_the_waiting_room_is_hidden_until_javascript_shows_it(client: TestClient
 
 
 def test_a_missing_clip_falls_back_to_the_mouse(client: TestClient) -> None:
-    """Dropping in static/processing.mp4 swaps this for the video; without the
-    file there must be no broken <video> element."""
-    from recipebook.web.templating import BUSY_CLIP
+    """Every clip format present becomes a <source>; none of them present must
+    leave a still mouse rather than a broken <video> element."""
+    from recipebook.web.templating import busy_clip_sources
 
     page = client.get("/import").text
-    if BUSY_CLIP.exists():
-        assert "processing.mp4" in page
+    sources = busy_clip_sources()
+    if sources:
+        assert "<video" in page
+        for source in sources:
+            assert f'src="{source["src"]}" type="{source["type"]}"' in page
     else:
         assert "<video" not in page
         assert 'class="busy__clip" src="/static/mouse.png"' in page
+
+
+def test_the_running_mouse_is_offered_in_both_formats(client: TestClient) -> None:
+    """WebM first so a browser that can take it never fetches the larger mp4."""
+    page = client.get("/import").text
+    assert page.index("running_mausi.webm") < page.index("running_mausi.mp4")
 
 
 def test_the_brand_is_two_images_and_no_text(client: TestClient) -> None:

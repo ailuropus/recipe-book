@@ -39,7 +39,28 @@ def minutes(value: int | None) -> str:
     return f"{hours} h" if rest == 0 else f"{hours} h {rest} min"
 
 
-BUSY_CLIP = STATIC_DIR / "processing.mp4"
+# The waiting room's clip, in the formats it might be shipped in. WebM first:
+# it is roughly half the size of the mp4, and a browser that cannot play it
+# falls straight through to the next <source> without fetching anything. mp4
+# second, which is what Safari and iOS take.
+BUSY_CLIP_FORMATS = (
+    ("running_mausi.webm", "video/webm"),
+    ("running_mausi.mp4", "video/mp4"),
+)
+
+
+def busy_clip_sources() -> list[dict[str, str]]:
+    """The clip formats actually present on disk, in preference order.
+
+    Checked once at startup rather than per render. With none of them there the
+    waiting room falls back to the still mouse, so a missing file is never a
+    broken <video> element.
+    """
+    return [
+        {"src": f"/static/{name}", "type": mime}
+        for name, mime in BUSY_CLIP_FORMATS
+        if (STATIC_DIR / name).exists()
+    ]
 
 
 def build_templates() -> Jinja2Templates:
@@ -50,10 +71,7 @@ def build_templates() -> Jinja2Templates:
         "minutes": minutes,
     }
     templates.env.filters.update(filters)
-    # Checked once at startup rather than per render. Drop an mp4 in as
-    # static/processing.mp4 and the waiting room uses it; until then it shows
-    # the mouse, so a missing file is never a broken <video> element.
-    templates.env.globals["has_busy_clip"] = BUSY_CLIP.exists()
+    templates.env.globals["busy_clip_sources"] = busy_clip_sources()
     templates.env.trim_blocks = True
     templates.env.lstrip_blocks = True
     return templates
