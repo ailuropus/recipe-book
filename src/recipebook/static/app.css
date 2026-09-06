@@ -469,10 +469,18 @@ textarea.field__input.mono {
 
 .actions { display: flex; gap: 0.6rem; align-items: center; margin-top: 1rem; }
 
+/* inline-flex, not inline-block, and an explicit line-height: an <a> inherits
+   the body's 1.55 while a <button> takes the UA's `normal`, so the same class
+   on the two of them came out two different heights in the same row. Centring
+   the label inside a flex box makes the box the same either way. */
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
   font-family: var(--mono);
   font-size: 0.75rem;
+  line-height: 1.35;
   letter-spacing: 0.04em;
   padding: 0.42rem 0.85rem;
   border: 1px solid var(--rule);
@@ -482,6 +490,11 @@ textarea.field__input.mono {
   text-decoration: none;
   cursor: pointer;
 }
+
+/* A button that posts one action is wrapped in its own form. The form is the
+   flex item, so it must not add a line box of its own around the button. */
+.actions form,
+.shield__actions form { display: flex; margin: 0; }
 
 .btn:hover { border-color: var(--signal); }
 
@@ -525,8 +538,6 @@ textarea.field__input.mono {
   /* A comfortable touch target is about 44px. The desk-sized buttons are 28. */
   .btn {
     min-height: 44px;
-    display: inline-flex;
-    align-items: center;
     font-size: 0.8125rem;
     padding: 0.5rem 1rem;
   }
@@ -789,10 +800,18 @@ textarea.field__input.mono {
   text-align: center;
 }
 
+/* A square box, because the drawing is square. `cover` rather than a bare
+   height: it makes the box the authority on the shape, so a clip that arrives
+   padded out to 16:9 — as this one first did — is cropped back to its content
+   instead of showing the padding. */
 .busy__clip {
   height: 120px;
-  width: auto;
+  width: 120px;
   max-width: 100%;
+  object-fit: cover;
+  /* The drawing sits on white, so multiply drops it onto the panel without a
+     visible box around it. It is also why padding has to be cropped rather
+     than tolerated: multiply keeps black black. */
   mix-blend-mode: multiply;
 }
 
@@ -838,5 +857,166 @@ textarea.field__input.mono {
 
 @media (max-width: 40rem) {
   .busy__panel { padding: 1.5rem 1.25rem; }
-  .busy__clip { height: 88px; }
+  .busy__clip { height: 88px; width: 88px; }
+}
+
+/* ---------------------------------------------------------------- the trash
+   Deleting asks nothing, which is only fair because taking it back is one
+   press away on the very next screen. That press is what this section is for,
+   so none of it is decoration.
+
+   Not the warning colour: that one means plan-ahead and nothing else. A
+   deletion is not a warning, it is a thing that happened. */
+
+.shield {
+  /* Fixed in the corner rather than in the flow: dropping a banner in above
+     the table pushed the whole index down the moment you deleted something,
+     which is the one screen that should stay exactly where you left it. */
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  width: min(23rem, calc(100vw - 2.5rem));
+  padding: 0.85rem 1.05rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  /* The one shadow in the app, and it is load-bearing: without it a panel the
+     colour of the page does not read as floating above the page. */
+  box-shadow: 0 6px 24px rgba(18, 23, 28, 0.16);
+  overflow: hidden;
+  /* Ten seconds, then gone, with or without JavaScript. `visibility: hidden`
+     at the end takes it out of the accessibility tree too, so a screen reader
+     does not keep offering a restore button that is no longer on screen. */
+  animation: shield-expire 10s linear forwards;
+}
+
+@keyframes shield-expire {
+  0%, 94%  { opacity: 1; visibility: visible; }
+  100%     { opacity: 0; visibility: hidden; }
+}
+
+.shield__label {
+  margin: 0 0 0.15rem;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The recipe name is the thing you are deciding about, so it is the loudest line
+   in the panel. Two lines at most: a long title must not push the button out
+   of a floating box. */
+.shield__title {
+  margin: 0 0 0.7rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.shield__actions { display: flex; align-items: center; gap: 0.75rem; }
+.shield__link { font-family: var(--mono); font-size: 0.75rem; }
+
+/* The ten seconds, drawn. It drains rather than fills: what it is counting
+   down to is the offer expiring, not something completing. */
+.shield__timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--rule-soft);
+}
+
+.shield__bar {
+  display: block;
+  height: 100%;
+  background: var(--signal);
+  transform-origin: left center;
+  animation: shield-drain 10s linear forwards;
+}
+
+@keyframes shield-drain {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* The bar and the expiry stay: the countdown is information, not motion for
+   its own sake, and a shield that never left would be a lie about the timer.
+   The fade at the end is the decorative part, so that is what goes. */
+@media (prefers-reduced-motion: reduce) {
+  .shield { animation-timing-function: step-end; }
+  .shield__bar { animation-timing-function: steps(10, end); }
+}
+
+.trashed-callout {
+  /* --del-bg sits a hair off --bg and read as no box at all. The surface
+     colour plus a left rule makes it a panel, and the rule is grey rather than
+     the warning colour: a deletion is a thing that happened, not a warning. */
+  margin: 0 0 2rem;
+  padding: 0.95rem 1.15rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--muted);
+  border-radius: 2px;
+}
+
+.trashed-callout__label {
+  margin: 0 0 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.trashed-callout__line {
+  margin: 0;
+  max-width: var(--measure);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.trashed-callout .actions { margin-top: 1.1rem; }
+
+/* "(deleted)" beside a parent that is in the trash. Grey and parenthetical: it
+   is a fact about where the parent went, not a problem with this recipe. */
+.lineage__gone { color: var(--faint); font-family: var(--mono); font-size: 0.75rem; }
+
+.actions__delete { margin: 0; }
+
+.trash__when {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.trash__actions { width: 1%; white-space: nowrap; }
+.trash__actions form { display: inline-block; margin: 0 0 0 0.4rem; }
+.trash__actions form:first-child { margin-left: 0; }
+
+@media (max-width: 40rem) {
+  /* Across the bottom of the screen, out of the way of the thumb reaching for
+     the search field at the top. */
+  .shield {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    width: auto;
+  }
+
+  /* Same reasoning as the index: the columns that answer "which recipe is
+     this" stay, the browsing ones go. */
+  .trash__when { display: none; }
+  .trash__actions form { display: block; margin: 0.3rem 0 0; }
+  .trash__actions form:first-child { margin-top: 0; }
+  .trashed-callout .actions .btn { flex: 1 1 100%; justify-content: center; }
 }

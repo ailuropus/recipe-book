@@ -21,6 +21,7 @@ from recipebook.domain.history import (
     apply_as_variant,
     undo,
 )
+from recipebook.domain.trash import visible
 from recipebook.llm.client import LlmCallFailed
 from recipebook.llm.reviser import propose_revision
 from recipebook.models import Recipe, Revision
@@ -35,9 +36,24 @@ SessionDep = Annotated[Session, Depends(session_scope)]
 
 
 def _get_recipe(session: Session, recipe_id: uuid.UUID) -> Recipe:
-    recipe = session.get(Recipe, recipe_id)
+    recipe = visible(session, recipe_id)
     if recipe is None:
         raise HTTPException(status_code=404, detail="No such recipe")
+    return recipe
+
+
+def _require_in_bank(recipe: Recipe) -> Recipe:
+    """Nothing is proposed, applied, or undone on a recipe in the trash.
+
+    Reviewing an old proposal is still allowed — it is reading — but the review
+    screen swaps its buttons for a line saying why, so this is a backstop for a
+    tab that was already open, not the thing the cook meets.
+    """
+    if recipe.in_trash:
+        raise HTTPException(
+            status_code=409,
+            detail="That recipe is in the trash. Restore it before changing it.",
+        )
     return recipe
 
 
@@ -51,7 +67,7 @@ def _get_revision(session: Session, revision_id: uuid.UUID) -> Revision:
 @router.get("/recipes/{recipe_id}/revise", response_class=HTMLResponse)
 def revise_form(request: Request, session: SessionDep, recipe_id: uuid.UUID) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "revise.html", {"recipe": _get_recipe(session, recipe_id)}
+        request, "revise.html", {"recipe": _require_in_bank(_get_recipe(session, recipe_id))}
     )
 
 
@@ -62,7 +78,7 @@ def revise_submit(
     recipe_id: uuid.UUID,
     instruction: Annotated[str, Form()] = "",
 ) -> Response:
-    recipe = _get_recipe(session, recipe_id)
+    recipe = _require_in_bank(_get_recipe(session, recipe_id))
 
     try:
         result = propose_revision(session, recipe, instruction)
@@ -101,6 +117,7 @@ def revision_preview(request: Request, session: SessionDep, revision_id: uuid.UU
             "added": added,
             "removed": removed,
             "unchanged": not has_changes(before, after),
+            "trashed": recipe.in_trash,
         },
     )
 
@@ -112,7 +129,7 @@ def revision_apply(
     action: Annotated[str, Form()],
 ) -> Response:
     revision = _get_revision(session, revision_id)
-    recipe = _get_recipe(session, revision.recipe_id)
+    recipe = _require_in_bank(_get_recipe(session, revision.recipe_id))
 
     if revision.status != "pending":
         # Already decided — most likely a back button and a second submit.
@@ -138,7 +155,7 @@ def revision_apply(
 @router.post("/revisions/{revision_id}/undo")
 def revision_undo(session: SessionDep, revision_id: uuid.UUID) -> Response:
     revision = _get_revision(session, revision_id)
-    recipe = _get_recipe(session, revision.recipe_id)
+    recipe = _require_in_bank(_get_recipe(session, revision.recipe_id))
 
     try:
         undo(session, revision, recipe)

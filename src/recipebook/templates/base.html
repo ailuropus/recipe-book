@@ -19,6 +19,7 @@
     <nav class="masthead__nav">
       <a href="/">index</a>
       <a href="/import">add</a>
+      <a href="/trash">trash</a>
     </nav>
   </header>
 
@@ -30,9 +31,19 @@
      JavaScript — the forms all still work, they just wait silently. #}
   <div class="busy" id="busy" hidden role="status" aria-live="polite">
     <div class="busy__panel">
-      {% if has_busy_clip %}
-      <video class="busy__clip" src="/static/processing.mp4"
-             muted loop playsinline preload="auto" aria-hidden="true"></video>
+      {% if busy_clip_sources %}
+      {# No autoplay: the overlay is hidden until a slow form is submitted, and
+         the script starts the clip then. preload="auto" is what makes it ready
+         to run the instant it is needed. #}
+      {# The attributes describe the box it is drawn in, not the file: the CSS
+         crops the file's padding away, and matching them here means no layout
+         shift between the reserved space and the running clip. #}
+      <video class="busy__clip" muted loop playsinline
+             preload="auto" aria-hidden="true" width="120" height="120">
+        {% for source in busy_clip_sources %}
+        <source src="{{ source.src }}" type="{{ source.type }}">
+        {% endfor %}
+      </video>
       {% else %}
       <img class="busy__clip" src="/static/mouse.png" alt="" width="330" height="260">
       {% endif %}

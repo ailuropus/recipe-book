@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Trash — rakamakatui{% endblock %}
+{% block main_class %}shell shell--wide{% endblock %}
+
+{% block content %}
+<h1 class="page-head">Trash</h1>
+<p class="page-note">
+  Deleted recipes, newest first. Nothing here expires on its own &mdash; a
+  recipe leaves this list because you restored it, or because you said forever.
+</p>
+
+{% if recipes %}
+<table class="index">
+  <thead>
+    <tr>
+      <th>title</th>
+      <th>category</th>
+      <th class="trash__when">deleted</th>
+      <th class="trash__actions"><span class="vh">actions</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for recipe in recipes %}
+    <tr>
+      <td class="index__title"><a href="/recipes/{{ recipe.id }}">{{ recipe.title }}</a></td>
+      <td class="index__category">{{ recipe.category }}</td>
+      <td class="trash__when">{{ recipe.deleted_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td class="trash__actions">
+        <form method="post" action="/recipes/{{ recipe.id }}/restore">
+          <input type="hidden" name="back" value="trash">
+          <button class="btn btn--small" type="submit">restore</button>
+        </form>
+        <form method="post" action="/recipes/{{ recipe.id }}/purge">
+          <button class="btn btn--small" type="submit">delete forever</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="index__count">{{ recipes | length }} recipe{{ "" if recipes | length == 1 else "s" }}</p>
+{% else %}
+<p class="empty">The trash is empty.</p>
+{% endif %}
+{% endblock %}

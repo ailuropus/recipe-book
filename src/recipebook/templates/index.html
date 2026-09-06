@@ -8,6 +8,27 @@
   <p class="hero__line">Let&rsquo;s cook something Maus!</p>
 </div>
 
+{# The confirmation shield: a toast in the corner, so the index below it does
+   not jump the moment you delete something. What went, one press to have it
+   back, and a bar draining through the ten seconds it stays. The bar and the
+   disappearing are both CSS animations, so the countdown is honest with
+   JavaScript off; the script only removes the element afterwards and tidies
+   the URL. #}
+{% if deleted_recipe %}
+<div class="shield" id="shield" role="status">
+  <p class="shield__label">Moved to the trash</p>
+  <p class="shield__title">{{ deleted_recipe.title }}</p>
+  <div class="shield__actions">
+    <form method="post" action="/recipes/{{ deleted_recipe.id }}/restore">
+      <input type="hidden" name="back" value="index">
+      <button class="btn btn--primary" type="submit">restore</button>
+    </form>
+    <a class="shield__link" href="/trash">open the trash</a>
+  </div>
+  <span class="shield__timer" aria-hidden="true"><span class="shield__bar"></span></span>
+</div>
+{% endif %}
+
 <form class="filters" method="get" action="/">
   <input class="filters__search" type="search" name="q" value="{{ q }}"
          placeholder="search" autocomplete="off">
@@ -54,7 +75,11 @@
       </td>
       <td class="index__title">
         <a href="/recipes/{{ recipe.id }}">{{ recipe.title }}</a>
-        {% if recipe.parent_id %}<span class="tag tag--variant">variant</span>{% endif %}
+        {# Not just "has a parent": a purged parent keeps its link in the
+           database and stops being drawn, here as everywhere else. #}
+        {% if recipe.parent_id in visible_parents %}
+        <span class="tag tag--variant">variant</span>
+        {% endif %}
       </td>
       <td class="index__category">{{ recipe.category }}</td>
       <td class="num index__hands-on">{{ recipe.hands_on_min | minutes }}</td>

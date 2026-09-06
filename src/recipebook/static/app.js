@@ -74,3 +74,32 @@
     });
   });
 })();
+
+/* The deletion shield.
+ *
+ * The ten seconds and the disappearing are CSS animations, so the countdown is
+ * real with JavaScript off. This only cleans up after them: the element is
+ * removed once it has finished, and the `?deleted=` that put it there is taken
+ * out of the address bar so a refresh does not start the ten seconds over on a
+ * deletion that happened minutes ago.
+ */
+(function () {
+  "use strict";
+
+  var shield = document.getElementById("shield");
+  if (!shield) return;
+
+  if (window.history && window.history.replaceState) {
+    var url = new URL(window.location.href);
+    if (url.searchParams.has("deleted")) {
+      url.searchParams.delete("deleted");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  }
+
+  shield.addEventListener("animationend", function (event) {
+    // The bar finishes at the same moment; only the shield's own animation
+    // means the offer has expired.
+    if (event.target === shield) shield.remove();
+  });
+})();

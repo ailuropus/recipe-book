@@ -75,7 +75,18 @@
   {% endif %}
 </section>
 
-{% if revision.status == "pending" %}
+{# A proposal for a recipe that has since been deleted still reads — the diff
+   is the record of what was proposed — but there is nothing to apply it to
+   until the recipe is back. #}
+{% if trashed %}
+<div class="decision">
+  <p class="decision__note">
+    This recipe is in the trash, so this proposal cannot be applied. Restore it
+    first.
+  </p>
+  <a class="btn" href="/recipes/{{ recipe.id }}">go to the recipe</a>
+</div>
+{% elif revision.status == "pending" %}
 <form class="decision" method="post" action="/revisions/{{ revision.id }}/apply">
   <button class="btn btn--primary" type="submit" name="action" value="replace">
     replace the recipe
