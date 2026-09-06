@@ -81,6 +81,16 @@ class Recipe(Base):
     )
     variant_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Deletion in two steps, and neither one removes the row. `deleted_at`
+    # moves a recipe into the trash bin; `purged_at` is "delete forever", which
+    # only means "never show this again". The row has to survive both, because
+    # a variant's parent_id must stay resolvable — that is what lets a variant
+    # of a trashed parent say "(deleted)" instead of quietly becoming an
+    # orphan. Losing a recipe outright is the one unrecoverable outcome here,
+    # so this app never does it.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -93,13 +103,31 @@ class Recipe(Base):
     parent: Mapped["Recipe | None"] = relationship(remote_side=[id], back_populates="variants")
     variants: Mapped[list["Recipe"]] = relationship(back_populates="parent")
 
+    @property
+    def in_trash(self) -> bool:
+        """Deleted, but recoverable, and listed in the trash bin."""
+        return self.deleted_at is not None and self.purged_at is None
+
+    @property
+    def is_purged(self) -> bool:
+        """Deleted forever: the row is here, the recipe is not in the UI."""
+        return self.purged_at is not None
+
     __table_args__ = (
         CheckConstraint("status IN ('new', 'tried', 'solid')", name="ck_recipes_status"),
         CheckConstraint("id <> parent_id", name="ck_recipes_not_own_parent"),
+        # Purging goes through the trash, never around it. Without this a row
+        # could be invisible everywhere while claiming not to be deleted, and
+        # the trash bin would be the only screen that could not find it.
+        CheckConstraint(
+            "purged_at IS NULL OR deleted_at IS NOT NULL",
+            name="ck_recipes_purged_implies_deleted",
+        ),
         Index("ix_recipes_search_tsv", "search_tsv", postgresql_using="gin"),
         Index("ix_recipes_parent_id", "parent_id"),
         Index("ix_recipes_category", "category"),
         Index("ix_recipes_status", "status"),
+        Index("ix_recipes_deleted_at", "deleted_at"),
     )
 
 
