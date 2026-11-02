@@ -189,13 +189,19 @@ to back, and do not go hunting for the fault in between.
 
 ### Backing a release out
 
-The same shape, aimed at the commit you were on before:
+The same shape, aimed at the commit you were on before — but the downgrade
+goes **first**:
 
 ```sh
+docker compose exec app alembic downgrade -1
 git checkout <previous sha>
 docker compose --profile app up -d --build
-docker compose exec app alembic downgrade -1
 ```
+
+The order matters. Only the release you are undoing has the migration file
+that knows how to undo itself; once the older code is checked out and built,
+Alembic finds the database at a revision it has never heard of and refuses to
+move.
 
 `downgrade -1` only if the release you are undoing added a migration, and only
 one step per migration it added. When in doubt:
