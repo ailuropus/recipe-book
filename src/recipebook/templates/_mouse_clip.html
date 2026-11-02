@@ -1,0 +1,19 @@
+{# The running mouse, shared by the waiting page and the overlay. Set
+   `autoplay` before including it on a page that should start running the
+   moment it loads; the overlay leaves it off and the script starts the clip
+   when a form is sent. #}
+{% set clips = busy_clip_sources() %}
+{% if clips %}
+{# preload="auto" is what makes it ready to run the instant it is needed. #}
+{# The attributes describe the box it is drawn in, not the file: the CSS
+   crops the file's padding away, and matching them here means no layout
+   shift between the reserved space and the running clip. #}
+<video class="busy__clip" muted loop playsinline {% if autoplay %}autoplay {% endif %}
+       preload="auto" aria-hidden="true" width="120" height="120">
+  {% for source in clips %}
+  <source src="{{ source.src }}" type="{{ source.type }}">
+  {% endfor %}
+</video>
+{% else %}
+<img class="busy__clip" src="{{ static_url('mouse.png') }}" alt="" width="330" height="260">
+{% endif %}

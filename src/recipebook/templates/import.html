@@ -13,8 +13,11 @@
 <p class="form-error">{{ error }}</p>
 {% endif %}
 
-<form class="form" method="post" action="/import"
-      data-busy="Reading your recipe…">
+{# data-once, not the overlay: this post only writes the job down and
+   redirects, so there is nothing to wait for here — only a second press to
+   refuse, which would pay for the same call twice. #}
+<form class="form" method="post" action="/import" data-once>
+  {% if retry_of %}<input type="hidden" name="retry_of" value="{{ retry_of }}">{% endif %}
   <label class="field">
     <span class="field__label">pasted recipe</span>
     <textarea class="field__input" name="raw" rows="22" required

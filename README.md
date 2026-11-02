@@ -81,7 +81,7 @@ rest.
 
 Paste anything into `/import` — prose, a list, a transcript. One LLM call
 restructures it into the house format, and the result lands on a review screen
-where every field is editable. **Nothing is written until you press save.**
+where every field is editable. **No recipe is written until you press save.**
 
 What a good recipe contains lives in `llm/prompts.py`, not in the schema: the
 schema can only say a step exists, not that it tells a beginner how to know the
@@ -99,9 +99,33 @@ places at once and they have to land together. The review screen shows what you
 asked, what the model says it did, a field-by-field metadata table, and a
 line diff of the recipe text with long unchanged runs collapsed.
 
-The proposal is stored as a pending row and the browser is redirected to it, so
-reloading the review page rereads a row rather than paying for the same call
-twice. Nothing reaches the recipe until you post a decision.
+The proposal is stored as a pending row, so reloading the review page rereads
+a row rather than paying for the same call twice. Nothing reaches the recipe
+until you post a decision.
+
+## Slow calls survive a closed tab
+
+An import takes about fifty seconds and a revision about seventy-five, which is
+too long to hold a form post open: a locked phone or a dropped connection would
+throw away a call that has already been paid for. So neither one runs inside
+the request.
+
+Submitting the form writes a row to `jobs` and redirects at once to
+`/jobs/<id>`. The call runs on a thread in the server and writes its result to
+that row whether or not a browser is still watching. The page at `/jobs/<id>`
+waits while the job runs, redirects to the review once it is done, and shows
+the form again — filled in, with the reason — if it failed. It is safe to
+reload, to leave, and to come back to.
+
+Anything still running, ready to review, or failed is listed under **Waiting
+for you** on the index until it has been dealt with: an import saved or
+discarded, a proposal decided, a failure retried or dismissed. That list is
+how a result left behind in a closed tab is found again.
+
+A restart kills the threads with it, so on startup every job still marked
+running is failed with a message saying so, rather than leaving a waiting page
+that never stops waiting. This assumes one server process, which is how the
+app runs; with several, one starting up would fail jobs another is working on.
 
 Applying a change offers three outcomes: replace the recipe, keep both (the
 revised version becomes a linked child, with the instruction as its variant

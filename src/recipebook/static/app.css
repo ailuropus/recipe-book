@@ -722,6 +722,16 @@ textarea.field__input.mono {
 
 .btn--small { font-size: 0.6875rem; padding: 0.15rem 0.45rem; }
 
+/* The index's waiting list borrows the history log's shape: it is the same kind
+   of thing, a short log of calls, one of which may want something from you. */
+.waiting__input {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.waiting__item--done .history__state { color: var(--signal); border-color: var(--signal); }
+
 /* ---------------------------------------------------------------- ask
    A question asked at the stove. Deliberately lighter than the review gate:
    it changes nothing, so it should not look like a decision. */
@@ -858,6 +868,24 @@ textarea.field__input.mono {
 @media (max-width: 40rem) {
   .busy__panel { padding: 1.5rem 1.25rem; }
   .busy__clip { height: 88px; width: 88px; }
+}
+
+/* The waiting page. The same panel the overlay uses, standing in the page
+   rather than floating over it, because here there is nothing underneath it
+   to keep in view. */
+.wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 2rem 0;
+}
+.wait__context {
+  margin: 0;
+  max-width: 26rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9375rem;
 }
 
 /* ---------------------------------------------------------------- the trash

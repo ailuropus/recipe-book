@@ -4,23 +4,57 @@ Binds to loopback. `tailscale serve --bg 8000` puts it on the tailnet with TLS,
 so nothing here knows about certificates or hostnames.
 """
 
-from collections.abc import Callable
+import logging
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import ProgrammingError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from recipebook.db import session_context
+from recipebook.domain.jobs import interrupt_running
 from recipebook.web.routes_import import router as import_router
+from recipebook.web.routes_jobs import router as jobs_router
 from recipebook.web.routes_recipes import router as recipes_router
 from recipebook.web.routes_revise import router as revise_router
 from recipebook.web.routes_trash import router as trash_router
 from recipebook.web.templating import STATIC_DIR, build_templates
 
-app = FastAPI(title="recipe-book", docs_url=None, redoc_url=None)
+log = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Fail the jobs the last process was running when it stopped.
+
+    Their calls ran on threads that died with it. Left alone, each would be a
+    waiting page that never stops waiting; failed, it hands back what was typed
+    so it can be sent again.
+
+    A missing jobs table is logged, not raised. A deploy rebuilds the container
+    and *then* migrates, through `docker compose exec` — and exec needs a
+    running container. Failing startup here would put the app in a restart
+    loop that the migration meant to fix it can never reach.
+    """
+    try:
+        with session_context() as session:
+            interrupted = interrupt_running(session)
+    except ProgrammingError:
+        log.warning("no jobs table yet; run `alembic upgrade head`")
+        interrupted = 0
+    if interrupted:
+        log.warning("marked %d interrupted job(s) as failed", interrupted)
+    yield
+
+
+app = FastAPI(title="recipe-book", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(import_router)
+app.include_router(jobs_router)
 app.include_router(revise_router)
 app.include_router(trash_router)
 app.include_router(recipes_router)

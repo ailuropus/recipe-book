@@ -1,9 +1,10 @@
 """The review gate.
 
-Propose, look, decide. The proposal is stored the moment it arrives and the
-browser is redirected to it, so reloading the review page rereads a row instead
-of paying for the same call twice. Nothing reaches the recipe until a decision
-is posted.
+Propose, look, decide. Proposing writes a job and sends the browser to wait on
+it, while the call runs on the server; the proposal is stored the moment it
+arrives, and the waiting page moves on to it. Reloading the review page rereads
+a row instead of paying for the same call twice, and closing the tab mid-call
+loses nothing. Nothing reaches the recipe until a decision is posted.
 """
 
 import uuid
@@ -21,12 +22,14 @@ from recipebook.domain.history import (
     apply_as_variant,
     undo,
 )
+from recipebook.domain.jobs import start_job
 from recipebook.domain.trash import visible
-from recipebook.llm.client import LlmCallFailed
-from recipebook.llm.reviser import propose_revision
-from recipebook.models import Recipe, Revision
+from recipebook.llm.reviser import check_instruction, propose_revision
+from recipebook.models import Job, Recipe, Revision
 from recipebook.schemas import RecipeDoc
+from recipebook.web.background import launch_and_redirect
 from recipebook.web.responses import see_other
+from recipebook.web.routes_jobs import close_retried
 from recipebook.web.templating import build_templates
 
 router = APIRouter()
@@ -77,22 +80,32 @@ def revise_submit(
     session: SessionDep,
     recipe_id: uuid.UUID,
     instruction: Annotated[str, Form()] = "",
+    retry_of: Annotated[str, Form()] = "",
 ) -> Response:
     recipe = _require_in_bank(_get_recipe(session, recipe_id))
 
     try:
-        result = propose_revision(session, recipe, instruction)
-    except (ValueError, LlmCallFailed, RuntimeError) as exc:
+        text = check_instruction(instruction)
+    except ValueError as exc:
         return templates.TemplateResponse(
             request,
             "revise.html",
-            {"recipe": recipe, "instruction": instruction, "error": str(exc)},
+            {"recipe": recipe, "instruction": instruction, "error": str(exc), "retry_of": retry_of},
             status_code=400,
         )
 
-    # Redirect rather than render: a reload on the review page must not spend
-    # money again.
-    return see_other(session, f"/revisions/{result.revision_id}")
+    if retry_of:
+        close_retried(session, retry_of)
+    job = start_job(session, kind="revise", text=text, recipe_id=recipe.id)
+    return launch_and_redirect(session, job, _run_revise)
+
+
+def _run_revise(session: Session, job: Job) -> None:
+    recipe = session.get(Recipe, job.recipe_id) if job.recipe_id else None
+    if recipe is None:
+        raise ValueError("The recipe this was revising no longer exists.")
+    result = propose_revision(session, recipe, job.input)
+    job.revision_id = result.revision_id
 
 
 @router.get("/revisions/{revision_id}", response_class=HTMLResponse)

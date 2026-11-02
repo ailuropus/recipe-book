@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from recipebook.db import session_scope
 from recipebook.domain.history import history_for, latest_undoable, record_manual_edit
+from recipebook.domain.jobs import result_url, waiting
 from recipebook.domain.trash import IN_BANK, visible, visible_parent_ids
 from recipebook.llm.asker import ask_about
 from recipebook.llm.client import LlmCallFailed
@@ -90,6 +91,7 @@ def index(
             "active_status": status,
             "visible_parents": visible_parent_ids(session, recipes),
             "deleted_recipe": _just_deleted(session, deleted),
+            "waiting": [(job, result_url(job) or f"/jobs/{job.id}") for job in waiting(session)],
         },
     )
 

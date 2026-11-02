@@ -29,6 +29,39 @@
 </div>
 {% endif %}
 
+{# Work that outlived the tab it was started in. An import or a revision runs
+   on the server whether or not anyone is watching, and lands here until it has
+   been dealt with — so closing the page mid-call loses nothing, and this is
+   where to find it again. #}
+{% if waiting %}
+<section class="block waiting">
+  <h2 class="block__head">Waiting for you</h2>
+  <ul class="history__list">
+    {% for job, url in waiting %}
+    <li class="history__item waiting__item--{{ job.status }}">
+      <span class="history__state">
+        {% if job.status == "running" %}working{% elif job.status == "failed" %}failed{% else %}ready to review{% endif %}
+      </span>
+      <span class="history__what">
+        {% if job.kind == "import" %}
+        <a href="{{ url }}">{{ job.result_doc.title if job.result_doc else "new recipe" }}</a>
+        {% if not job.result_doc %}<span class="waiting__input">{{ job.input | truncate(70) }}</span>{% endif %}
+        {% else %}
+        <a href="{{ url }}">{{ job.recipe.title if job.recipe else "a recipe" }}</a>
+        <span class="waiting__input">{{ job.input | truncate(70) }}</span>
+        {% endif %}
+      </span>
+      {% if job.status == "failed" %}
+      <form class="history__undo" method="post" action="/jobs/{{ job.id }}/dismiss">
+        <button class="btn btn--small" type="submit">dismiss</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <form class="filters" method="get" action="/">
   <input class="filters__search" type="search" name="q" value="{{ q }}"
          placeholder="search" autocomplete="off">

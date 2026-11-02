@@ -14,12 +14,23 @@
 
 <form class="form" method="post" action="/import/save">
   <input type="hidden" name="llm_call_id" value="{{ llm_call_id }}">
+  <input type="hidden" name="job_id" value="{{ job_id or '' }}">
   {% set show_variant_note = false %}
   {% include "_recipe_fields.html" %}
 
   <div class="actions">
     <button class="btn btn--primary" type="submit">save recipe</button>
+    {# A button in another form, tied to it by id: discarding has to be a post,
+       because it takes the import off the index's waiting list. #}
+    {% if job_id %}
+    <button class="btn" type="submit" form="discard">discard</button>
+    {% else %}
     <a class="btn" href="/import">discard</a>
+    {% endif %}
   </div>
 </form>
+
+{% if job_id %}
+<form id="discard" method="post" action="/jobs/{{ job_id }}/dismiss"></form>
+{% endif %}
 {% endblock %}

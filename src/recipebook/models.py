@@ -1,10 +1,11 @@
 """SQLAlchemy models.
 
-Three tables:
+Four tables:
 
   recipes    — scalar metadata as columns, structured content as JSONB
   revisions  — the audit log, the undo stack, and the pending review, in one
   llm_calls  — one row per API call, with a cost snapshot
+  jobs       — a slow model call in flight, and where its result went
 """
 
 import uuid
@@ -226,4 +227,63 @@ class LlmCall(Base):
         CheckConstraint("kind IN ('import', 'revise', 'ask')", name="ck_llm_calls_kind"),
         Index("ix_llm_calls_recipe_id", "recipe_id"),
         Index("ix_llm_calls_called_at", "called_at"),
+    )
+
+
+class Job(Base):
+    """One slow model call, run apart from the request that asked for it.
+
+    An import takes about fifty seconds and a revision about seventy-five. Held
+    open inside a form post, that is a minute in which locking the phone, a
+    flaky connection, or closing the tab throws away a call that has already
+    been paid for. So the post only writes this row and starts the work; the
+    browser is sent to a page that waits on the row, and the result lands here
+    whether or not anyone is still watching.
+
+    Done means the result is stored, not that anyone has seen it. `closed_at`
+    is the second fact: the import was saved or discarded, the failure was
+    dismissed. Until then the index lists the job, which is how a result left
+    behind in a closed tab is found again. A revision's own status says the
+    same thing for revise jobs, so those are never closed here.
+    """
+
+    __tablename__ = "jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    kind: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), default="running")
+
+    # What the cook typed: the pasted recipe, or the instruction. Kept so a
+    # failure hands it straight back instead of asking for it again.
+    input: Mapped[str] = mapped_column(Text)
+
+    # The recipe being revised. For an import, the recipe that was saved from
+    # it, which stays null until the review is saved.
+    recipe_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # An import's result is not a recipe yet, so it lives here until the review
+    # screen saves it. A revision's result is its own row.
+    result_doc: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("revisions.id", ondelete="SET NULL"), nullable=True
+    )
+    llm_call_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("llm_calls.id", ondelete="SET NULL"), nullable=True
+    )
+
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    recipe: Mapped["Recipe | None"] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('import', 'revise')", name="ck_jobs_kind"),
+        CheckConstraint("status IN ('running', 'done', 'failed')", name="ck_jobs_status"),
+        Index("ix_jobs_closed_at", "closed_at"),
     )

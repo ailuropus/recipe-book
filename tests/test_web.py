@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Iterator
 from decimal import Decimal
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
@@ -16,11 +17,12 @@ from sqlalchemy.orm import Session
 from recipebook.db import get_engine, get_session_factory
 from recipebook.demo import demo_recipes, demo_variant_of_pizza
 from recipebook.mapping import recipe_from_doc
-from recipebook.models import LlmCall, Recipe
-from recipebook.schemas import Ingredient, Step
+from recipebook.models import Job, LlmCall, Recipe
+from recipebook.schemas import Ingredient, RecipeDoc, Step
 from recipebook.web.app import app
 from recipebook.web.templating import STATIC_DIR
 from tests.conftest import use_test_database
+from tests.fake_anthropic import fake_client
 
 
 @pytest.fixture
@@ -33,6 +35,7 @@ def client(engine: Engine) -> Iterator[TestClient]:
     use_test_database()
 
     with Session(engine) as setup:
+        setup.query(Job).delete()
         setup.query(LlmCall).delete()
         setup.query(Recipe).delete()
         docs = demo_recipes()
@@ -51,6 +54,7 @@ def client(engine: Engine) -> Iterator[TestClient]:
         yield test_client
 
     with Session(engine) as teardown:
+        teardown.query(Job).delete()
         teardown.query(LlmCall).delete()
         teardown.query(Recipe).delete()
         teardown.commit()
@@ -276,14 +280,8 @@ def test_import_form_renders(client: TestClient) -> None:
     assert 'name="raw"' in response.text
 
 
-def test_import_shows_a_review_and_saves_nothing(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The gate: the model has answered, and still nothing is in the database."""
-    from recipebook.llm.importer import ImportResult
-    from recipebook.schemas import RecipeDoc
-
-    doc = RecipeDoc(
+def _syrniki() -> RecipeDoc:
+    return RecipeDoc(
         title="Сырники",
         category="Завтраки",
         description="Творожные оладьи на завтрак.",
@@ -294,20 +292,219 @@ def test_import_shows_a_review_and_saves_nothing(
         ingredients=[Ingredient(name="творог", qty="400", unit="г", note="жирность 9%")],
         steps=[Step(n=1, text_md="Разотри творог вилкой до однородности.")],
     )
+
+
+def _fake_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real importer, talking to a fake model, so the cost row is real."""
+    from recipebook.llm.importer import import_recipe
+
+    fake, _ = fake_client(_syrniki())
     monkeypatch.setattr(
         "recipebook.web.routes_import.import_recipe",
-        lambda session, raw: ImportResult(doc=doc, llm_call_id=uuid.uuid4(), cost_usd="0.0312"),
+        lambda session, raw: import_recipe(session, raw, client=fake),
     )
+
+
+def _start_import(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Post a paste and return the job URL the browser is sent to wait on."""
+    _fake_import(monkeypatch)
+    response = client.post("/import", data={"raw": "творог, яйцо, мука"}, follow_redirects=False)
+    assert response.status_code == 303
+    location = str(response.headers["location"])
+    assert location.startswith("/jobs/")
+    return location
+
+
+def test_import_shows_a_review_and_saves_nothing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate: the model has answered, and still nothing is in the database."""
+    _fake_import(monkeypatch)
 
     response = client.post("/import", data={"raw": "творог, яйцо, мука"})
 
     assert response.status_code == 200
+    assert response.url.path.startswith("/imports/")
     assert "Сырники" in response.text
     assert "творог | 400 | г | жирность 9%" in response.text
-    assert "0.0312" in response.text
+    # 1200 in at $5, 800 cache reads at $0.50, 900 out at $25, per million.
+    assert "0.0289" in response.text
 
     with Session(get_engine()) as session:
         assert session.query(Recipe).filter(Recipe.title == "Сырники").count() == 0
+
+
+def test_starting_an_import_returns_before_the_call_is_made(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The post only writes the job down. The call belongs to the job, not to
+    the request, which is what lets the browser leave without losing it."""
+    started: list[object] = []
+    monkeypatch.setattr(
+        "recipebook.web.background.start", lambda target, *args: started.append(args)
+    )
+
+    response = client.post("/import", data={"raw": "творог"}, follow_redirects=False)
+
+    assert response.status_code == 303
+    assert len(started) == 1
+    page = client.get(response.headers["location"]).text
+    assert "Reading your recipe" in page
+    assert "data-job-status" in page
+    assert "You can close this page" in page
+
+    with Session(get_engine()) as check:
+        job = check.query(Job).one()
+        assert job.status == "running"
+        assert job.input == "творог"
+
+
+def test_the_waiting_page_reports_its_status(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _start_import(client, monkeypatch)
+
+    status = client.get(f"{location}/status").json()
+    assert status["status"] == "done"
+    assert status["url"].startswith("/imports/")
+
+
+def test_a_running_job_tells_the_page_to_keep_waiting(client: TestClient) -> None:
+    with Session(get_engine()) as setup:
+        job = Job(kind="import", input="творог")
+        setup.add(job)
+        setup.commit()
+        job_id = job.id
+
+    assert client.get(f"/jobs/{job_id}/status").json() == {
+        "status": "running",
+        "url": f"/jobs/{job_id}",
+    }
+    page = client.get(f"/jobs/{job_id}").text
+    assert "<video" in page and "autoplay" in page
+
+
+def test_a_closed_tab_loses_nothing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start an import and never come back to the waiting page: the result is
+    on the index, and opening it costs nothing more."""
+    _start_import(client, monkeypatch)
+
+    index = client.get("/").text
+    assert "Waiting for you" in index
+    assert "ready to review" in index
+    assert "Сырники" in index
+
+    review = client.get("/").text.split('href="/imports/', 1)[1].split('"', 1)[0]
+    for _ in range(3):
+        page = client.get(f"/imports/{review}")
+        assert page.status_code == 200
+        assert "Сырники" in page.text
+
+    with Session(get_engine()) as check:
+        assert check.query(LlmCall).count() == 1
+
+
+def _save_review(client: TestClient, job_url: str) -> httpx.Response:
+    job_id = job_url.rsplit("/", 1)[1]
+    with Session(get_engine()) as read:
+        job = read.get(Job, uuid.UUID(job_id))
+        assert job is not None
+        call_id = str(job.llm_call_id)
+    response: httpx.Response = client.post(
+        "/import/save",
+        data={
+            "title": "Сырники",
+            "category": "Завтраки",
+            "hands_on_min": "20",
+            "total_min": "25",
+            "status": "new",
+            "ingredients": "творог | 400 | г",
+            "steps": "Разотри творог вилкой.",
+            "llm_call_id": call_id,
+            "job_id": job_id,
+        },
+        follow_redirects=False,
+    )
+    return response
+
+
+def test_saving_an_import_takes_it_off_the_waiting_list(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _start_import(client, monkeypatch)
+    response = _save_review(client, location)
+    assert response.status_code == 303
+
+    assert "Waiting for you" not in client.get("/").text
+
+
+def test_saving_the_same_import_twice_makes_one_recipe(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Back button, save again: the second press lands on the first recipe."""
+    location = _start_import(client, monkeypatch)
+    first = _save_review(client, location)
+    second = _save_review(client, location)
+
+    assert first.headers["location"] == second.headers["location"]
+    with Session(get_engine()) as check:
+        assert check.query(Recipe).filter(Recipe.title == "Сырники").count() == 1
+
+    # And the review itself now points at what it became.
+    job_id = location.rsplit("/", 1)[1]
+    again = client.get(f"/imports/{job_id}", follow_redirects=False)
+    assert again.headers["location"] == first.headers["location"]
+
+
+def test_discarding_an_import_takes_it_off_the_waiting_list(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    location = _start_import(client, monkeypatch)
+    job_id = location.rsplit("/", 1)[1]
+
+    review = client.get(location).text
+    assert f'action="/jobs/{job_id}/dismiss"' in review
+
+    response = client.post(f"/jobs/{job_id}/dismiss", follow_redirects=False)
+    assert response.status_code == 303
+    assert "Waiting for you" not in client.get("/").text
+
+    with Session(get_engine()) as check:
+        assert check.query(Recipe).filter(Recipe.title == "Сырники").count() == 0
+
+
+def test_an_empty_paste_is_refused_without_starting_anything(client: TestClient) -> None:
+    response = client.post("/import", data={"raw": "   "})
+    assert response.status_code == 400
+    assert "Nothing was pasted." in response.text
+
+    with Session(get_engine()) as check:
+        assert check.query(Job).count() == 0
+
+
+def test_a_restart_fails_the_jobs_it_interrupted(client: TestClient) -> None:
+    """The call ran on a thread that died with the process. Without this the
+    waiting page would wait forever."""
+    from recipebook.domain.jobs import INTERRUPTED
+
+    with Session(get_engine()) as setup:
+        job = Job(kind="import", input="творог")
+        setup.add(job)
+        setup.commit()
+        job_id = job.id
+
+    with TestClient(app):
+        pass
+
+    with Session(get_engine()) as check:
+        interrupted = check.get(Job, job_id)
+        assert interrupted is not None
+        assert interrupted.status == "failed"
+        assert interrupted.error == INTERRUPTED
+
+    page = client.get(f"/jobs/{job_id}").text
+    assert "server restarted" in page
+    assert "творог" in page
 
 
 def test_saving_a_reviewed_import_creates_the_recipe(client: TestClient) -> None:
@@ -387,6 +584,23 @@ def test_a_bad_line_in_the_review_saves_nothing(client: TestClient) -> None:
         assert check.query(Recipe).filter(Recipe.title == "Сырники").count() == 0
 
 
+def test_the_app_starts_before_the_jobs_table_exists(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deploy rebuilds, then migrates with `docker compose exec`. If startup
+    failed on the missing table, the container would restart forever and the
+    exec that runs the migration would have nothing to run in."""
+    from sqlalchemy.exc import ProgrammingError
+
+    def no_table(session: object) -> int:
+        raise ProgrammingError("SELECT ...", {}, Exception('relation "jobs" does not exist'))
+
+    monkeypatch.setattr("recipebook.web.app.interrupt_running", no_table)
+
+    with TestClient(app) as fresh:
+        assert fresh.get("/import").status_code == 200
+
+
 def test_import_reports_a_missing_api_key_plainly(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -398,18 +612,49 @@ def test_import_reports_a_missing_api_key_plainly(
     monkeypatch.setattr("recipebook.web.routes_import.import_recipe", blow_up)
 
     response = client.post("/import", data={"raw": "творог"})
-    assert response.status_code == 400
+    assert response.status_code == 200
     assert "ANTHROPIC_API_KEY is not set." in response.text
     # The paste comes back rather than being thrown away.
     assert "творог" in response.text
 
 
+def test_a_failed_import_waits_on_the_index_until_retried(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def blow_up(session: object, raw: str) -> None:
+        raise RuntimeError("overloaded")
+
+    monkeypatch.setattr("recipebook.web.routes_import.import_recipe", blow_up)
+    failed = client.post("/import", data={"raw": "творог"})
+    job_id = failed.url.path.rsplit("/", 1)[1]
+    assert f'name="retry_of" value="{job_id}"' in failed.text
+
+    index = client.get("/").text
+    assert "failed" in index
+    assert "творог" in index
+
+    _fake_import(monkeypatch)
+    client.post("/import", data={"raw": "творог", "retry_of": job_id})
+
+    with Session(get_engine()) as check:
+        job = check.get(Job, uuid.UUID(job_id))
+        assert job is not None
+        assert job.closed_at is not None
+
+
 def test_slow_forms_are_marked_for_the_waiting_room(client: TestClient) -> None:
-    """The three forms that call the model, and only those."""
-    assert 'data-busy="Reading your recipe' in client.get("/import").text
+    """The three forms that call the model, and only those.
+
+    Import and revise start a job and redirect to a page that waits on it, so
+    they only refuse a second press. The question holds the request open, so
+    it puts up the overlay.
+    """
+    import_page = client.get("/import").text
+    assert "data-once" in import_page
+    assert "data-busy" not in import_page.split("<form", 1)[1].split(">", 1)[0]
 
     recipe_id = _first_recipe_id(client, "Луковый суп")
-    assert 'data-busy="Working out the change' in client.get(f"/recipes/{recipe_id}/revise").text
+    assert "data-once" in client.get(f"/recipes/{recipe_id}/revise").text
     assert 'data-busy="Thinking' in client.get(f"/recipes/{recipe_id}").text
 
     # The plain edit form is fast and must not put up an overlay.

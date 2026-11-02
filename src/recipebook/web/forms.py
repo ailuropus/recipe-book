@@ -99,7 +99,8 @@ class RecipeForm(BaseModel):
 
 
 class ImportSaveForm(RecipeForm):
-    """The review screen's form: a recipe, plus which call paid for it.
+    """The review screen's form: a recipe, plus which call paid for it and
+    which job it came from.
 
     A subclass rather than a second parameter on the route. FastAPI flattens a
     form model into individual fields only when it is the sole body parameter;
@@ -108,6 +109,7 @@ class ImportSaveForm(RecipeForm):
     """
 
     llm_call_id: str = ""
+    job_id: str = ""
 
 
 def _first_message(exc: ValidationError) -> str:

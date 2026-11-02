@@ -30,14 +30,12 @@ class ProposalResult:
     cost_usd: str
 
 
-def propose_revision(
-    session: Session,
-    recipe: Recipe,
-    instruction: str,
-    *,
-    client: Anthropic | None = None,
-) -> ProposalResult:
-    """Ask for a revised recipe and write it down as pending."""
+def check_instruction(instruction: str) -> str:
+    """The instruction, trimmed, or a ValueError worded for the cook.
+
+    Separate from the call so the form can refuse an empty instruction on the
+    spot, rather than starting a job that can only fail.
+    """
     text = instruction.strip()
     if not text:
         raise ValueError("Describe the change you want.")
@@ -46,6 +44,18 @@ def propose_revision(
             f"That instruction is {len(text):,} characters, and the limit is "
             f"{MAX_INSTRUCTION_CHARS:,}."
         )
+    return text
+
+
+def propose_revision(
+    session: Session,
+    recipe: Recipe,
+    instruction: str,
+    *,
+    client: Anthropic | None = None,
+) -> ProposalResult:
+    """Ask for a revised recipe and write it down as pending."""
+    text = check_instruction(instruction)
 
     before = doc_from_recipe(recipe)
 

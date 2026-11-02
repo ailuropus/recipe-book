@@ -18,7 +18,7 @@ from recipebook.db import get_engine
 from recipebook.llm.prompts import REVISE_TASK, revise_message
 from recipebook.llm.reviser import MAX_INSTRUCTION_CHARS, propose_revision
 from recipebook.mapping import recipe_from_doc
-from recipebook.models import LlmCall, Recipe, Revision
+from recipebook.models import Job, LlmCall, Recipe, Revision
 from recipebook.schemas import Ingredient, RecipeDoc, RevisionProposal, Step
 from recipebook.web.app import app
 from tests.conftest import use_test_database
@@ -145,6 +145,7 @@ def client(engine: Engine) -> Iterator[TestClient]:
     use_test_database()
 
     with Session(engine) as setup:
+        setup.query(Job).delete()
         setup.query(LlmCall).delete()
         setup.query(Revision).delete()
         setup.query(Recipe).delete()
@@ -155,6 +156,7 @@ def client(engine: Engine) -> Iterator[TestClient]:
         yield test_client
 
     with Session(engine) as teardown:
+        teardown.query(Job).delete()
         teardown.query(LlmCall).delete()
         teardown.query(Revision).delete()
         teardown.query(Recipe).delete()
@@ -179,7 +181,14 @@ def _propose(client: TestClient, monkeypatch: pytest.MonkeyPatch, instruction: s
         follow_redirects=False,
     )
     assert response.status_code == 303
-    return str(response.headers["location"])
+    job = str(response.headers["location"])
+    assert job.startswith("/jobs/")
+
+    # The job is done by the time the post returns (see `jobs_run_inline`), so
+    # its page is already a redirect to the proposal.
+    waited = client.get(job, follow_redirects=False)
+    assert waited.status_code == 303
+    return str(waited.headers["location"])
 
 
 def test_the_review_page_shows_the_summary_and_the_diff(
@@ -313,9 +322,35 @@ def test_a_failed_call_returns_to_the_form_with_the_instruction(
     monkeypatch.setattr("recipebook.web.routes_revise.propose_revision", blow_up)
 
     response = client.post(f"/recipes/{_pizza_id()}/revise", data={"instruction": "убавь сахар"})
-    assert response.status_code == 400
+    assert response.status_code == 200
+    assert response.url.path.startswith("/jobs/")
     assert "ANTHROPIC_API_KEY is not set." in response.text
     assert "убавь сахар" in response.text
+
+
+def test_an_empty_instruction_is_refused_without_starting_anything(client: TestClient) -> None:
+    response = client.post(f"/recipes/{_pizza_id()}/revise", data={"instruction": "  "})
+    assert response.status_code == 400
+    assert "Describe the change you want." in response.text
+
+    with Session(get_engine()) as check:
+        assert check.query(Job).count() == 0
+
+
+def test_a_pending_proposal_waits_on_the_index_until_decided(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Closing the tab mid-call leaves the proposal on the index, and deciding
+    it is what takes it off."""
+    location = _propose(client, monkeypatch, "убавь сахар до 10 г")
+
+    index = client.get("/").text
+    assert "Waiting for you" in index
+    assert f'href="{location}"' in index
+    assert "убавь сахар до 10 г" in index
+
+    _decide(client, location, "discard")
+    assert "Waiting for you" not in client.get("/").text
 
 
 # ------------------------------------------------------------ variants and undo

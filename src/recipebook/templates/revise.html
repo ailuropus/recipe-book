@@ -13,8 +13,8 @@
 <p class="form-error">{{ error }}</p>
 {% endif %}
 
-<form class="form" method="post" action="/recipes/{{ recipe.id }}/revise"
-      data-busy="Working out the change…">
+<form class="form" method="post" action="/recipes/{{ recipe.id }}/revise" data-once>
+  {% if retry_of %}<input type="hidden" name="retry_of" value="{{ retry_of }}">{% endif %}
   <label class="field">
     <span class="field__label">what to change</span>
     <span class="field__hint">

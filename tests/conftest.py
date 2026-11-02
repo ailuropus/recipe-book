@@ -106,3 +106,14 @@ def session(engine: Engine) -> Iterator[Session]:
         if transaction.is_active:
             transaction.rollback()
         connection.close()
+
+
+@pytest.fixture(autouse=True)
+def jobs_run_inline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run a job's call on the request thread instead of a thread of its own.
+
+    By the time a post that starts a job returns, the job is done or failed, so
+    a test can follow the redirect and read the result without waiting on
+    anything. The thread itself is two lines and the standard library's.
+    """
+    monkeypatch.setattr("recipebook.web.background.start", lambda target, *args: target(*args))

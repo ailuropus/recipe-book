@@ -27,29 +27,16 @@
     {% block content %}{% endblock %}
   </main>
 
-  {# The waiting room. Hidden until a slow form is submitted, and inert without
-     JavaScript — the forms all still work, they just wait silently. #}
+  {# The short wait: a question on the recipe page, about ten seconds. Hidden
+     until that form is sent, and inert without JavaScript — the form still
+     works, it just waits silently. The long calls do not use this: an import
+     or a revision gets a page of its own to wait on, at /jobs/<id>. #}
   <div class="busy" id="busy" hidden role="status" aria-live="polite">
     <div class="busy__panel">
-      {% set clips = busy_clip_sources() %}
-      {% if clips %}
-      {# No autoplay: the overlay is hidden until a slow form is submitted, and
-         the script starts the clip then. preload="auto" is what makes it ready
-         to run the instant it is needed. #}
-      {# The attributes describe the box it is drawn in, not the file: the CSS
-         crops the file's padding away, and matching them here means no layout
-         shift between the reserved space and the running clip. #}
-      <video class="busy__clip" muted loop playsinline
-             preload="auto" aria-hidden="true" width="120" height="120">
-        {% for source in clips %}
-        <source src="{{ source.src }}" type="{{ source.type }}">
-        {% endfor %}
-      </video>
-      {% else %}
-      <img class="busy__clip" src="{{ static_url('mouse.png') }}" alt="" width="330" height="260">
-      {% endif %}
+      {% set autoplay = false %}
+      {% include "_mouse_clip.html" %}
       <p class="busy__label">Processing&hellip;</p>
-      <p class="busy__note">This takes up to a minute and a half. Leaving the page cancels it.</p>
+      <p class="busy__note">Usually about ten seconds.</p>
     </div>
   </div>
 

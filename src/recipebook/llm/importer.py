@@ -24,8 +24,12 @@ class ImportResult:
     cost_usd: str
 
 
-def import_recipe(session: Session, raw: str, *, client: Anthropic | None = None) -> ImportResult:
-    """Restructure a pasted recipe and record what the call cost."""
+def check_paste(raw: str) -> str:
+    """The paste, trimmed, or a ValueError worded for the person who pasted it.
+
+    Separate from the call so the form can refuse an empty paste on the spot,
+    rather than starting a job that can only fail.
+    """
     text = raw.strip()
     if not text:
         raise ValueError("Nothing was pasted.")
@@ -34,6 +38,12 @@ def import_recipe(session: Session, raw: str, *, client: Anthropic | None = None
             f"That is {len(text):,} characters, and the limit is {MAX_PASTE_CHARS:,}. "
             "Paste one recipe at a time."
         )
+    return text
+
+
+def import_recipe(session: Session, raw: str, *, client: Anthropic | None = None) -> ImportResult:
+    """Restructure a pasted recipe and record what the call cost."""
+    text = check_paste(raw)
 
     result = structured_call(
         output_format=RecipeDoc,
