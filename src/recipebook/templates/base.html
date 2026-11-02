@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#eef1f3">
+  <meta name="theme-color" content="#f6f3f3">
   <title>{% block title %}rakamakatui{% endblock %}</title>
   <link rel="icon" href="{{ static_url('mouse.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ static_url('app.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="masthead">

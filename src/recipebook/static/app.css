@@ -6,37 +6,50 @@
  * ever marks anything else it stops meaning anything.
  *
  * No serif headings, no cream, no terracotta.
+ *
+ * The colours come from the mouse: its fur for ink, its ears for anything
+ * interactive, its wooden spoon for plan-ahead. Taken as hues, not as pixels —
+ * the ear pink and the spoon brown are both under 3:1 on paper, so what is
+ * read uses deeper shades of them, and the drawing's own pink appears only
+ * as a fill.
  */
 
 :root {
-  --bg:       #eef1f3;  /* cool paper */
-  --surface:  #f8fafb;
+  --bg:       #f6f3f3;  /* the paper the mouse is painted on */
+  --surface:  #fdfcfc;
 
   /* Three steps of emphasis, all of them legible. Measured against --bg:
-     ink 15.9:1, muted 7.0:1, faint 4.8:1. The old --faint was 2.7:1, which
+     ink 15.1:1, muted 6.9:1, faint 4.9:1. An earlier --faint was 2.7:1, which
      is fine on a desk and useless on a phone propped against a bowl in a
      kitchen with the window behind you — and it carried real information:
-     status, timestamps, what a call cost. */
-  --ink:      #12171c;
-  --muted:    #49525a;
-  --faint:    #646b70;
+     status, timestamps, what a call cost. The fur is a green-blue black, so
+     the greys lean the same way rather than being neutral. */
+  --ink:      #142020;
+  --muted:    #4a5654;
+  --faint:    #626c6a;
 
-  --rule:     #d3dbe0;
-  --rule-soft:#e3e9ec;
+  --rule:     #e4dbdc;
+  --rule-soft:#eee8e8;
 
-  --signal:   #0b5fd0;  /* the only interactive colour */
-  --signal-bg:#e4edfb;
+  /* The only interactive colour, 5.5:1. --signal-fill is the same hue at the
+     ear's own strength, for the one place pink is a surface rather than text:
+     the primary button, which carries ink on it at 5.6:1. */
+  --signal:   #b8236a;
+  --signal-bg:#fbe4ef;
+  --signal-fill: #f262a8;
 
-  /* Reserved. Plan-ahead and nothing else. */
-  --warn:     #c2185b;
-  --warn-bg:  #fce7f0;
+  /* Reserved. Plan-ahead and nothing else. Spoon brown — it was pink until
+     pink became the interactive colour, and a warning that looks like a link
+     stops meaning anything. */
+  --warn:     #8f4e16;
+  --warn-bg:  #f7e7d4;
 
-  /* Diff only. Additions get the one extra hue in the palette; removals get
-     grey rather than red, so nothing on a review screen can be mistaken for
-     the plan-ahead warning. */
+  /* Diff only. Additions get the one hue the mouse does not have; removals
+     get grey rather than red, so nothing on a review screen can be mistaken
+     for the plan-ahead warning. */
   --add:      #0a6b3d;
   --add-bg:   #e7f3ec;
-  --del-bg:   #e7ebee;
+  --del-bg:   #ece8e8;
 
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -499,12 +512,14 @@ textarea.field__input.mono {
 .btn:hover { border-color: var(--signal); }
 
 .btn--primary {
-  background: var(--signal);
-  border-color: var(--signal);
-  color: #fff;
+  background: var(--signal-fill);
+  border-color: var(--signal-fill);
+  color: var(--ink);
+  font-weight: 600;
 }
 
-.btn--primary:hover { filter: brightness(1.08); }
+/* Darker on hover, not lighter: the ink on it is what has to stay readable. */
+.btn--primary:hover { border-color: var(--signal); filter: brightness(0.95); }
 
 /* ---------- small screens: the phone in the kitchen ----------
    This is the case the app is actually used in: propped against a bowl,
@@ -911,7 +926,7 @@ textarea.field__input.mono {
   border-radius: 3px;
   /* The one shadow in the app, and it is load-bearing: without it a panel the
      colour of the page does not read as floating above the page. */
-  box-shadow: 0 6px 24px rgba(18, 23, 28, 0.16);
+  box-shadow: 0 6px 24px rgba(20, 32, 32, 0.16);
   overflow: hidden;
   /* Ten seconds, then gone, with or without JavaScript. `visibility: hidden`
      at the end takes it out of the accessibility tree too, so a screen reader
